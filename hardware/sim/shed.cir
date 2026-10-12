@@ -1,0 +1,23 @@
+* Reader shed: BOOST_OUT 12.6 V -> Q11 (P) -> reader (84 ohm = 150 mA). Q4 (N) from IO48 via R17.
+.include models.inc
+.param R18val=10k
+Vb boost 0 12.6
+V3 v33 0 3.3
+Vio io48 0 3.3
+R17 io48 q4g 100
+R18 q4g v33 {R18val}
+M4 q4d q4g 0 0 N7002 W=1 L=1
+R51 q11g q4d 100k
+R52 q11g boost 100k
+M11 rdr q11g boost boost P3401 W=1 L=1
+Rrdr rdr 0 84
+.control
+op
+echo "IO48 high (reader on):" 
+print v(rdr) v(q11g)
+alter Vio dc=0
+op
+echo "IO48 low (shed):"
+print v(rdr) v(q11g)
+.endc
+.end

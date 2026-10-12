@@ -1,0 +1,8 @@
+__pycache__/
+*.kicad_prl
+*-backups/
+fp-info-cache
+hardware/fab/schematic/
+hardware/lib/wb.3dshapes/
+secrets.yaml
+.esphome/

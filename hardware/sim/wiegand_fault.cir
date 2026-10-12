@@ -1,0 +1,18 @@
+* Fault (rev 10): 12.6 V / 13.2 V (the reader rail, JP1 open / bridged) straight onto the D0 terminal
+.include models.inc
+V3 v33 0 3.3
+Vf line 0 12.6
+X712 line 0 SM712CH
+Rser line d0in 1k
+Dz 0 d0in DZ5V1
+C14 d0in 0 100p
+R11 d0in v33 10k
+.op
+.control
+run
+print v(d0in) i(Vf)
+alter Vf dc=13.2
+run
+print v(d0in) i(Vf)
+.endc
+.end

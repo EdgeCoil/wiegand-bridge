@@ -1,0 +1,20 @@
+* Reader current sense (rev 10): 0.2 ohm low-side shunt, LMV321 non-inverting x21 (20k/1k), 1k + 100n into IO9
+.include models.inc
+V3 v33 0 3.3
+Ird 0 rdrgnd DC 0   ; reader current returns into RDR_GND
+R59 rdrgnd 0 0.2
+X1 rdrgnd fb out v33 0 OPA
+R69 out fb 20k
+R70 fb 0 1k
+R71 out adc 1k
+C38 adc 0 100n
+.control
+foreach ma 0 30 60 100 150 300 785
+  let amps = $ma / 1000
+  alter Ird dc = $&amps
+  op
+  let vadc = v(adc)
+  echo "reader $ma mA -> IO9 $&vadc V"
+end
+.endc
+.end

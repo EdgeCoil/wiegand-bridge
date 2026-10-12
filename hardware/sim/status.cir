@@ -1,0 +1,29 @@
+* Charger CHRG into the TCA9535 (rev 10): D12 (red, Vf~1.8 V) from +5V via R24 1k; R61 100k pull-up to 3V3.
+* CHRG open (idle / done) vs sinking (charging). Also EXT_SENSE divider and the expander VIH (0.7 x 3.3 = 2.31 V).
+.include models.inc
+.model DRED D(Is=1e-20 N=1.9 Rs=10)
+V5 v5 0 4.6
+V3 v33 0 3.3
+D12 v5 k DRED
+R24 k chrg 1k
+R61 chrg v33 100k
+Ssink chrg 0 ctl 0 SWM
+.model SWM SW(Ron=20 Roff=1e12 Vt=0.5)
+Vctl ctl 0 0
+Rex1 v5 ext 10k
+Rex2 ext 0 15k
+.control
+op
+echo "CHRG idle (open drain off):"
+print v(chrg) v(ext)
+alter Vctl dc=1
+op
+echo "CHRG charging (sinking):"
+print v(chrg) i(V5)
+alter Vctl dc=0
+alter V5 dc=0
+op
+echo "on battery (+5V absent):"
+print v(chrg) v(ext)
+.endc
+.end

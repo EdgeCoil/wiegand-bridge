@@ -1,0 +1,95 @@
+# wiegand-bridge
+
+An ESP32-S3 board that connects a standard **Wiegand keypad / card reader** to **Home Assistant**
+through ESPHome. The reader's codes and card numbers reach HA as events; HA decides what happens.
+
+**The board only reports.** It has no output toward a lock. It is designed for the reader side of a
+door, where anyone can reach it, so the part that unlocks anything stays somewhere else.
+
+![Top](hardware/fab/render-top.png)
+
+> **Status: revision 10, first boards in manufacture, not yet tested on hardware.** Treat
+> everything here as unverified until the bench tests in [`docs/design.md`](docs/design.md) pass.
+
+## Features
+
+- **ESP32-S3-WROOM-1-N8R2**, with Wi-Fi and BLE; native USB-C for flashing and logs
+- **6–36 V input** (screw terminal or 5.5 mm barrel jack, centre positive), reverse-polarity and surge protected
+- **Regulated reader supply** (12.6 V boost, or 13.2 V by solder jumper) from every power source,
+  with current sensing, voltage monitoring and firmware-controlled shedding
+- **Wiegand D0/D1** through a 5 V-tolerant Schmitt buffer, clamped against 12 V miswiring;
+  open-drain **LED** and **BEEP** outputs to the reader
+- **LiFePO4 backup**: on-board charger (CN3058E, 3.6 V), cell protection (DW01A + FS8205A),
+  thermistor-gated charging, seamless handover when external power drops
+- **Tamper switch** under the lid, plus a header for an enclosure-mounted one
+- **Four dry-contact inputs** (door contact, exit button, etc.), 24 V-tolerant
+- **1.3" SH1106 OLED** socket (I²C), plus an SPI header for a TFT or e-paper
+- **RS-485** port (SP3485) for OSDP readers, with jumper-selectable termination and bias
+- **TCA9535** expander for status lines and spares; **Qwiic**, **W5500** Ethernet and 2×6
+  expansion headers
+- **SM712** surge/ESD protection on every field wire
+- Optional **relay** footprint, not fitted by default (see *Security* in the design doc)
+- 90 × 95 mm, 4 layers, assembled by JLCPCB
+
+## Repository layout
+
+| Path | What it is |
+|---|---|
+| [`hardware/`](hardware/) | The board, **generated from Python**: `netlist.py` is the source of truth |
+| [`hardware/fab/`](hardware/fab/) | Ready-to-order outputs: Gerbers, BOM, CPL, schematic and assembly PDFs, renders |
+| [`hardware/sim/`](hardware/sim/) | ngspice checks of the analogue corners |
+| [`firmware/`](firmware/) | ESPHome configuration |
+| [`docs/design.md`](docs/design.md) | How it works, pin map, connectors, security notes, bench tests |
+| [`docs/breadboard.md`](docs/breadboard.md) | A through-hole breadboard version for trying the reader first |
+
+## Building the board
+
+Everything under `hardware/` is produced by scripts, so the board can be rebuilt after any change.
+
+| Script | Does |
+|---|---|
+| `netlist.py` | Every part, its JLCPCB part number, and which net each pad joins |
+| `placement.py` | Where each part sits |
+| `build_pcb.py` | Makes `wiegand-bridge.kicad_pcb`, unrouted, from the two files above |
+| `route.py` | Thermal vias, hand routes for the fine-pitch parts, GND fan-out, Freerouting, pours |
+| `stitch.py`, `via_fix.py`, `gndcheck.py`, `dfm_post.py`, `audit.py` | Stitching, vias out of pads, ground connectivity, paste and pours, mechanical and current audit |
+| `finish_net.py` | Routes one straggling connection by grid A* if Freerouting leaves one |
+| `schematic.py` | A readable schematic PDF from the netlist |
+| `fab.py` | JLCPCB outputs into `fab/` |
+
+```bash
+cd hardware
+python3 build_pcb.py                       # needs KiCad 9's pcbnew Python module
+ROUTE_WORK=/tmp/wb python3 route.py 30     # needs Java + Freerouting 2.4.x
+python3 stitch.py && python3 stitch.py --islands
+python3 via_fix.py                         # must report 0 vias inside pad openings
+python3 gndcheck.py
+python3 dfm_post.py
+python3 audit.py
+python3 fab.py
+kicad-cli pcb drc wiegand-bridge.kicad_pcb
+```
+
+Tools used: KiCad 9.0, Freerouting 2.4.1 (OpenJDK), `easyeda2kicad` 1.0.1 (for `lib/`), ngspice 44.
+
+**3D models are not included** (about 60 MB). The renders in `fab/` show the board with them. To
+fetch them, run `easyeda2kicad --3d --lcsc_id=<part> --output hardware/lib/wb` for the LCSC part
+numbers in the BOM.
+
+## Ordering
+
+Upload `hardware/fab/wiegand-bridge-gerbers.zip` to JLCPCB (4 layers), choose PCB Assembly
+on the top side, then upload `wiegand-bridge-bom.csv` and `wiegand-bridge-cpl.csv`. **Check every
+polarised part in the placement preview** before confirming: diodes, LEDs, ICs, the ESP32 and the
+USB-C.
+
+Not assembled by JLCPCB: the battery connector housing and cell, the OLED module, and any
+unpopulated headers.
+
+## Licence
+
+Not yet chosen. **All rights reserved until a licence is added.**
+
+---
+
+edgecoil · [edgecoil.dev](https://edgecoil.dev)

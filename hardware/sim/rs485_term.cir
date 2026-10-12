@@ -1,0 +1,16 @@
+* RS-485 idle (rev 10): weak 20k bias always; 390 ohm bias via JP3/JP4; 120 ohm termination via JP2; 120 ohm at the far end
+V3 v33 0 3.3
+R66 a v33 20k
+R67 b 0 20k
+R72 a v33 390
+R73 b 0 390
+Rt1 a b 120
+Rt2 a b 120
+.control
+op
+echo "both ends terminated, strong bias fitted: V(A)-V(B)"
+print v(a)-v(b)
+let ibias = (3.3 - v(a)) / 390
+print ibias
+.endc
+.end

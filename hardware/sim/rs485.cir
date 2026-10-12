@@ -1,0 +1,13 @@
+* RS-485 idle bias (rev 10): A 20k to 3V3, B 20k to GND, SP3485 input ~12k each side (1/8 unit load ~ 96k ignored);
+* with and without the 120 ohm termination (JP2), and with a far-end node terminating too.
+V3 v33 0 3.3
+R66 a v33 20k
+R67 b 0 20k
+Rin_a a 0 96k
+Rin_b b 0 96k
+.control
+op
+echo "unterminated: V(A)-V(B) idle"
+print v(a)-v(b)
+.endc
+.end

@@ -1,0 +1,17 @@
+* IN1 (rev 10): SM712 at J9 -> R40 1k -> Q7 drain; gate 3V3; source IN1 with 10k pull-up and 10 nF
+.include models.inc
+V3 v33 0 3.3
+Vj j9 0 PWL(0 0 1m 0 1.001m 12 2m 12)
+X712 j9 0 SM712CH
+R40 j9 q7d 1k
+M7 q7d v33 in1 in1 N7002 W=1 L=1
+R44 in1 v33 10k
+C27 in1 0 10n
+.tran 1u 2m
+.control
+run
+meas tran in_closed FIND v(in1) AT=0.9m
+meas tran in_12v    FIND v(in1) AT=1.9m
+meas tran i_12v     FIND i(Vj) AT=1.9m
+.endc
+.end

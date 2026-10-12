@@ -1,0 +1,24 @@
+* D0 input path (rev 10): reader line -> SM712 at the terminal -> R9 1k -> D0_IN (zener, 100p, 10k to 3V3) -> buffer
+.include models.inc
+V3 v33 0 3.3
+Vrd vrd 0 5
+Rpu vrd line 4.7k
+Sw  line 0 ctl 0 SWM
+.model SWM SW(Ron=20 Roff=1e9 Vt=0.5)
+Vctl ctl 0 PULSE(0 1 100u 1u 1u 50u 2m)
+X712 line 0 SM712CH
+Rser line d0in 1k
+Dz 0 d0in DZ5V1
+C14 d0in 0 100p
+R11 d0in v33 10k
+.tran 0.2u 4.2m
+.control
+run
+meas tran vhigh FIND v(d0in) AT=1m
+meas tran vlow  FIND v(d0in) AT=130u
+meas tran tfall WHEN v(d0in)=0.8 FALL=1
+meas tran trise WHEN v(d0in)=2.0 RISE=1
+let lowwidth = trise - tfall
+print lowwidth
+.endc
+.end

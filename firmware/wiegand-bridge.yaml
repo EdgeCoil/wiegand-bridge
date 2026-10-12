@@ -1,0 +1,291 @@
+# edgecoil wiegand-bridge -- ESPHome config for the revision 10 board (hardware/).
+#
+# UNTESTED ON HARDWARE. Written to prove the board's pin map compiles; flash it once a board exists
+# and work through docs/design.md *Bench tests* first.
+#
+# THIS DEVICE ONLY REPORTS. There is no relay output defined: credentials go to Home Assistant as
+# events, HA decides, and any unlock happens elsewhere, through whatever actuator HA already controls.
+# A reader-side board usually sits where anyone can reach it -- read docs/design.md *Security*:
+# an isolated IoT network, HA's "allow device actions" OFF, a device_id check, a tamper alert.
+#
+# Secrets (secrets.yaml): wifi_ssid, wifi_password, wiegand_bridge_api_key, wiegand_bridge_ota_password.
+
+substitutions:
+  name: wiegand-bridge
+  friendly_name: Wiegand bridge
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+
+esp32:
+  board: esp32-s3-devkitc-1
+  variant: esp32s3
+  flash_size: 8MB
+  framework:
+    type: esp-idf
+
+psram:
+  mode: quad                     # N8R2. NOT octal -- the wrong mode fails at runtime
+  speed: 80MHz
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+api:
+  encryption:
+    key: !secret wiegand_bridge_api_key
+  actions:
+    - action: feedback_granted
+      then:
+        - lambda: 'id(screen_text) = "Granted";'
+        - script.execute: screen_wake
+        - output.turn_on: reader_led
+        - output.turn_on: reader_beep
+        - delay: 150ms
+        - output.turn_off: reader_beep
+        - delay: 2s
+        - output.turn_off: reader_led
+    - action: feedback_denied
+      then:
+        - lambda: 'id(screen_text) = "Denied";'
+        - script.execute: screen_wake
+        - repeat:
+            count: 3
+            then:
+              - output.turn_on: reader_beep
+              - delay: 100ms
+              - output.turn_off: reader_beep
+              - delay: 100ms
+
+ota:
+  - platform: esphome
+    password: !secret wiegand_bridge_ota_password
+
+logger:
+  level: INFO
+  hardware_uart: USB_SERIAL_JTAG   # rev 10: UART0 (IO43/44) is the RS-485 port
+  # NEVER raise to DEBUG in service: debug logs the Wiegand frames, i.e. the codes.
+
+i2c:
+  - id: bus_a
+    sda: GPIO41
+    scl: GPIO42
+
+# rev 10: TCA9535 at 0x20 (register-compatible with PCA9555 -> the pca9554 component, 16 pins).
+# P00 relay drive (relay not fitted by default; deliberately NOT defined here), P01 CHRG,
+# P02 DONE, P03 external power, P04 5 V power-good, P05 W5500 reset, P06-P17 to the 2x6 header.
+pca9554:
+  - id: io_exp
+    i2c_id: bus_a
+    address: 0x20
+    pin_count: 16
+
+# rev 10: RS-485 / OSDP port on UART0 (SP3485, DE on IO38). No OSDP component exists in ESPHome
+# yet; the UART is declared so the pins are claimed and the port can be bench-tested.
+uart:
+  - id: rs485
+    tx_pin: GPIO43
+    rx_pin: GPIO44
+    baud_rate: 9600
+
+wiegand:
+  - id: reader
+    d0: GPIO4                    # via U4 74LVC2G17
+    d1: GPIO5
+    on_key:                      # keys reach pin_input through its source_id; this only wakes the screen
+      then:
+        - script.execute: screen_wake
+    on_tag:
+      then:
+        - script.execute: screen_wake
+        - homeassistant.event:
+            event: esphome.wiegand_bridge
+            data:
+              type: fob
+              value: !lambda "return x;"
+
+key_collector:
+  - id: pin_input
+    source_id: reader
+    min_length: 4
+    max_length: 10
+    end_keys: "#"
+    end_key_required: true
+    clear_keys: "*"
+    timeout: 10s
+    on_result:
+      then:
+        - homeassistant.event:
+            event: esphome.wiegand_bridge
+            data:
+              type: code
+              value: !lambda "return x.c_str();"
+
+output:
+  # Spare expander pin P17 has no pull-down on the board (it could not be routed): declared as an
+  # output (default off = low) so it is never a floating input. P06-P16 are tied low by RN1-RN3.
+  - platform: gpio
+    id: exp_p17_tie_low
+    pin: {pca9554: io_exp, number: 15}
+  - platform: gpio
+    id: reader_led
+    pin: GPIO6                   # Q1 -> J11 LED (confirm polarity on the bench)
+  - platform: gpio
+    id: reader_beep
+    pin: GPIO40                  # Q2 -> J11 BEEP (rev 10: moved from IO7, which could not be routed out)
+  - platform: gpio
+    id: reader_shed
+    pin:
+      number: GPIO48
+      inverted: true             # R18 holds IO48 high = reader on; turn_on drives it low = shed
+
+light:
+  - platform: status_led
+    name: "${friendly_name} status"
+    pin:
+      number: GPIO21
+      inverted: true             # D8 sinks into the pin
+
+binary_sensor:
+  - platform: status
+    name: "${friendly_name} online"
+  - platform: gpio
+    name: "${friendly_name} tamper"
+    device_class: tamper
+    pin:
+      number: GPIO8              # lid on = SW3 closed = low
+    filters:
+      - delayed_on: 200ms
+  - platform: gpio
+    id: ext_power
+    name: "${friendly_name} external power"
+    device_class: power
+    pin: {pca9554: io_exp, number: 3}       # +5V divider, ~2.8 V when present (rev 10: via the expander)
+    on_press:
+      - output.turn_off: reader_shed
+  - platform: gpio
+    name: "${friendly_name} battery charging"
+    device_class: battery_charging
+    pin: {pca9554: io_exp, number: 1, inverted: true}   # CN3058E CHRG, open drain, low = charging
+  - platform: gpio
+    name: "${friendly_name} battery charged"
+    pin: {pca9554: io_exp, number: 2, inverted: true}   # CN3058E DONE, low = full
+  - platform: gpio
+    name: "${friendly_name} 5 V supply OK"
+    device_class: power
+    entity_category: diagnostic
+    pin: {pca9554: io_exp, number: 4}       # LMR16020 PGOOD
+  - platform: gpio
+    name: "${friendly_name} input 1"
+    pin: {number: GPIO15, inverted: true}
+    filters: [delayed_on_off: 30ms]
+  - platform: gpio
+    name: "${friendly_name} input 2"
+    pin: {number: GPIO16, inverted: true}
+    filters: [delayed_on_off: 30ms]
+  - platform: gpio
+    name: "${friendly_name} input 3"
+    pin: {number: GPIO17, inverted: true}
+    filters: [delayed_on_off: 30ms]
+  - platform: gpio
+    name: "${friendly_name} input 4"
+    pin: {number: GPIO18, inverted: true}
+    filters: [delayed_on_off: 30ms]
+
+sensor:
+  - platform: wifi_signal
+    name: "${friendly_name} RSSI"
+    update_interval: 300s
+  - platform: adc
+    pin: GPIO2
+    name: "${friendly_name} reader supply"
+    attenuation: 12db
+    filters:
+      - multiply: 7.667          # R31 100k / R32 15k
+    update_interval: 60s
+  - platform: adc
+    pin: GPIO9
+    name: "${friendly_name} reader current"
+    unit_of_measurement: mA
+    attenuation: 12db
+    filters:
+      - multiply: 238.1          # 0.2 ohm shunt x 21 gain: 4.2 mV per mA (sim/isense.cir)
+    update_interval: 30s
+  - platform: adc
+    id: battery_v
+    pin: GPIO1
+    name: "${friendly_name} battery"
+    attenuation: 12db
+    filters:
+      - multiply: 2.0
+    update_interval: 60s
+    on_value_range:
+      - below: 3.0
+        then:
+          - if:
+              condition:
+                binary_sensor.is_off: ext_power
+              then:
+                - output.turn_on: reader_shed
+
+  # Battery thermistor (rev 10, 2026-10-11): U5's TEMP divider (R77 5.1k from +5V, R78 68k, a 10k
+  # B3950 NTC on the cell at J4 pins 3-4, or RT1 via JP5) read through R79/R80 (2/3) on IO3.
+  # The divider is fed from +5V, so it only reads while external power is present.
+  - platform: adc
+    id: bat_temp_adc
+    pin: {number: GPIO3, ignore_strapping_warning: true}   # IO3 strap only matters with JTAG eFuses burnt
+    attenuation: 12db
+    internal: true
+    update_interval: 60s
+  - platform: template
+    id: bat_ntc_ohms
+    internal: true
+    unit_of_measurement: "Ω"
+    update_interval: 60s
+    lambda: |-
+      if (!id(ext_power).state) return NAN;          // divider unpowered on battery
+      const float vt = id(bat_temp_adc).state * 1.5f; // undo R79/R80
+      const float v5 = 4.7f;                          // +5V after the OR diode, nominal
+      if (vt >= v5 * 0.88f) return NAN;               // no thermistor (open reads ~91 %): U5 is not charging
+      const float rx = 5100.0f * vt / (v5 - vt);      // R77
+      const float g = 1.0f / rx - 1.0f / 68000.0f - 1.0f / 300000.0f;   // remove R78 and R79+R80
+      return g > 0 ? 1.0f / g : NAN;
+  - platform: ntc
+    sensor: bat_ntc_ohms
+    name: "${friendly_name} battery temperature"
+    calibration:
+      b_constant: 3950
+      reference_temperature: 25°C
+      reference_resistance: 10kOhm
+
+globals:
+  - id: screen_text
+    type: std::string
+    initial_value: '"Present card or enter code"'
+
+font:
+  - file: "gfonts://Roboto"
+    id: font_status
+    size: 14
+
+display:
+  - platform: ssd1306_i2c
+    id: oled
+    i2c_id: bus_a
+    model: "SH1106 128x64"
+    address: 0x3C
+    update_interval: 500ms
+    lambda: |-
+      it.print(64, 32, id(font_status), TextAlign::CENTER, id(screen_text).c_str());
+
+script:
+  - id: screen_wake
+    mode: restart
+    then:
+      - lambda: id(oled).turn_on();
+      - delay: 60s
+      - lambda: |-
+          id(screen_text) = "Present card or enter code";
+          id(oled).turn_off();

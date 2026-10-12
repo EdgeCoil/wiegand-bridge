@@ -1,0 +1,26 @@
+* VSYS source change: +5V (via D11) falls away, Q5 hands VSYS to the LiFePO4 cell. 0.5 A load on VSYS.
+.include models.inc
+V5 v5src 0 PWL(0 4.6 2m 4.6 2.5m 0 6m 0 6.5m 4.6 10m 4.6)
+Rsrc v5src p5 0.05
+C20 p5 0 10u
+R27 p5 0 100k
+R15 p5 ext 10k
+R16 ext 0 15k
+D11 p5 vsys SS34
+Vbat bat 0 3.3
+Rbat bat batp 0.08
+M5 batp p5 vsys vsys P3401 W=1 L=1
+C7 vsys 0 22u
+C8 vsys 0 10u
+Iload vsys 0 0.5
+.tran 1u 10m
+.control
+run
+meas tran vsys_on5v  FIND v(vsys) AT=1m
+meas tran vsys_onbat FIND v(vsys) AT=5m
+meas tran vsys_min   MIN v(vsys) FROM=1.9m TO=10m
+meas tran ibat_on5v  FIND i(Vbat) AT=1m
+meas tran ext_on     FIND v(ext) AT=1m
+meas tran ext_off    FIND v(ext) AT=5m
+.endc
+.end
