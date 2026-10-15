@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 edgecoil
+# SPDX-License-Identifier: CERN-OHL-S-2.0
 """Wiegand reader bridge, revision 10 -- the netlist, as data.
 
 Source of truth for build_pcb.py. See docs/design.md for the reasoning; pad numbers are

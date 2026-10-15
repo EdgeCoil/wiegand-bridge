@@ -88,7 +88,23 @@ unpopulated headers.
 
 ## Licence
 
-Not yet chosen. **All rights reserved until a licence is added.**
+| What | Licence |
+|---|---|
+| The board: everything in `hardware/`, including the scripts that define it (`netlist.py`, `placement.py`, `build_pcb.py`, `route.py`), the simulations and the fabrication outputs | [CERN-OHL-S-2.0](LICENSES/CERN-OHL-S-2.0.txt) |
+| Firmware and the general-purpose build tools (every other script in `hardware/`) | [MIT](LICENSES/MIT.txt) |
+| Documentation (`README.md`, `docs/`) and the renders | [CC BY 4.0](LICENSES/CC-BY-4.0.txt) |
+
+Each source file carries an SPDX header, and [`REUSE.toml`](REUSE.toml) covers the rest by path.
+
+CERN-OHL-S is strongly reciprocal. You may build, modify and sell boards from this design, but if you
+ship a modified version you must publish its source under the same licence.
+**Source location:** https://github.com/EdgeCoil/wiegand-bridge
+
+**The edgecoil name and mark are not licensed.** Remove the mark from the silkscreen of any boards
+you make or sell, and don't sell them under the edgecoil name.
+
+The design is provided as is, with no warranty. It is unverified on hardware (see *Status*). It is
+an access-control accessory, so you are responsible for the security of any installation.
 
 ---
 

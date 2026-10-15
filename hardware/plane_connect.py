@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 edgecoil
+# SPDX-License-Identifier: MIT
 """Connect an orphaned GND pad to the In1 ground plane: route from the pad to the nearest spot where a
 via fits AND lands inside the main In1 plane fill, then drop the via there.
 

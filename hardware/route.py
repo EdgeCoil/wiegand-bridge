@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 edgecoil
+# SPDX-License-Identifier: CERN-OHL-S-2.0
 """Route wiegand-bridge.kicad_pcb: thermal vias, Freerouting, ground pours, fill.
 
 Run after build_pcb.py, with the system python3 (KiCad 9 pcbnew). Needs Java 25 for Freerouting 2.4.1.

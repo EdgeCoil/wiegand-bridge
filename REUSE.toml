@@ -1,0 +1,29 @@
+# Licensing by path (REUSE specification 3.x). Files with their own SPDX header follow the header.
+version = 1
+
+# The board: KiCad design, footprints and symbols, simulations, fabrication outputs.
+[[annotations]]
+path = ["hardware/**"]
+precedence = "closest"   # a file's own SPDX header wins (the MIT tools in hardware/)
+SPDX-FileCopyrightText = "2026 edgecoil"
+SPDX-License-Identifier = "CERN-OHL-S-2.0"
+
+# Documentation and renders.
+[[annotations]]
+path = ["README.md", "docs/**", "hardware/fab/render-*.png"]
+precedence = "override"
+SPDX-FileCopyrightText = "2026 edgecoil"
+SPDX-License-Identifier = "CC-BY-4.0"
+
+# The edgecoil name and mark are not licensed (see README, Licence).
+[[annotations]]
+path = ["hardware/art/edgecoil-mark.geojson"]
+precedence = "override"
+SPDX-FileCopyrightText = "2026 edgecoil"
+SPDX-License-Identifier = "LicenseRef-edgecoil-trademark"
+
+[[annotations]]
+path = [".gitignore", "REUSE.toml"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 edgecoil"
+SPDX-License-Identifier = "CC0-1.0"

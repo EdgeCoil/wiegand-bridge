@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 edgecoil
+# SPDX-License-Identifier: MIT
 """List GND copper fragments not connected to the In1 plane (own connectivity: KiCad's ratsnest isn't
 reachable from Python). Prints each orphan component's layer, bbox, area and any pads it holds."""
 import pcbnew

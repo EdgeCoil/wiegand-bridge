@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 edgecoil
+# SPDX-License-Identifier: MIT
 # edgecoil wiegand-bridge -- ESPHome config for the revision 10 board (hardware/).
 #
 # UNTESTED ON HARDWARE. Written to prove the board's pin map compiles; flash it once a board exists

@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 edgecoil
+# SPDX-License-Identifier: MIT
 """Move GND vias that sit inside a pad's solder-mask opening (DFM review 2026-10-11).
 
 route.fanout_gnd placed vias 0.9 mm from a pad's CENTRE, which on big pads (SMA diodes, 1206 caps,

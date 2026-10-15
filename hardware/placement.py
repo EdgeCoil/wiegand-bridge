@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 edgecoil
+# SPDX-License-Identifier: CERN-OHL-S-2.0
 """Placement for build_pcb.py: ref -> (x mm, y mm, rotation deg, side).
 
 Board 90 x 95 mm at (100, 100) since revision 10 (70 x 75 in revision 9) -- grown from the guide's ~65 x 70 on 2026-10-11 so the autorouter has

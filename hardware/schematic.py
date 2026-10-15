@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 edgecoil
+# SPDX-License-Identifier: MIT
 """Readable schematic PDF generated from netlist.py: one page per circuit block (netlistsvg, analog skin).
 
 The board is built from code, so there is no hand-drawn schematic. This draws each block of

@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 edgecoil
+# SPDX-License-Identifier: MIT
 """JLCPCB outputs from the routed board: gerbers + drill (zipped), BOM and CPL in JLCPCB's columns.
 
 Run with the system python3 after route.py. Writes into fab/.

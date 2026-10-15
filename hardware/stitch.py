@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 edgecoil
+# SPDX-License-Identifier: MIT
 """Ground stitching for the 4-layer board: tie every GND pad and pour island to the In1 plane.
 
 1. A GND via beside each GND SMD pad on F.Cu (short stub), unless one is already within 1.5 mm.

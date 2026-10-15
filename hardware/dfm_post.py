@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 edgecoil
+# SPDX-License-Identifier: MIT
 """Post-route DFM/thermal fixes (reviews of 2026-10-11). Run after routing and stitching, before fab.py.
 
 1. Paste under the exposed pads (U2, U3, U5) is redrawn so it keeps 0.15 mm off every via ring:

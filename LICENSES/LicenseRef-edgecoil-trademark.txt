@@ -1,0 +1,4 @@
+The edgecoil name and the edgecoil mark are not licensed for use. All rights reserved.
+
+You may build, modify and sell this design under its licences, but not under the edgecoil name
+or mark. Remove the mark from the silkscreen of any boards you make or sell.

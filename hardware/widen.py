@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 edgecoil
+# SPDX-License-Identifier: MIT
 """Widen power tracks in place after routing, keeping only widenings that pass KiCad DRC.
 
 Revision 10's input nets (+VIN_RAW, +VIN_F, +VIN) were routed at 0.25 mm because build_pcb's

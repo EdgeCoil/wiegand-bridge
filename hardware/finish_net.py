@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 edgecoil
+# SPDX-License-Identifier: MIT
 """Hand-finish one unrouted connection on the bottom layer with a grid A* search.
 
 Freerouting left IO7 (U1 pad 7 -> R7 pad 1) unrouted on revision 10: the top layer on the left of the

@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 edgecoil
+# SPDX-License-Identifier: CERN-OHL-S-2.0
 """Build wiegand-bridge.kicad_pcb from netlist.py + placement.py (unrouted).
 
 Run with the system python3 (KiCad 9's pcbnew module). Routing is a separate step (route.py).

@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 edgecoil
+# SPDX-License-Identifier: MIT
 """Mechanical and current-capacity audit of the routed board -- the checks KiCad DRC does not make.
 
 1. Body clashes: every pair of footprints whose body outlines (F.Fab, else courtyard, else silkscreen)
