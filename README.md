@@ -8,7 +8,8 @@ door, where anyone can reach it, so the part that unlocks anything stays somewhe
 
 ![Top](hardware/fab/render-top.png)
 
-> **Status: revision 10, first boards in manufacture, not yet tested on hardware.** Treat
+> **Status: revision 10, first boards in manufacture, not yet tested on hardware.** The files here
+> are rev 10b, which differs only in the back silkscreen (it adds the source link). Treat
 > everything here as unverified until the bench tests in [`docs/design.md`](docs/design.md) pass.
 
 ## Features
@@ -98,7 +99,8 @@ Each source file carries an SPDX header, and [`REUSE.toml`](REUSE.toml) covers t
 
 CERN-OHL-S is strongly reciprocal. You may build, modify and sell boards from this design, but if you
 ship a modified version you must publish its source under the same licence.
-**Source location:** https://github.com/EdgeCoil/wiegand-bridge
+**Source location:** https://github.com/EdgeCoil/wiegand-bridge, linked from the board's back
+silkscreen as `wiegand.edgecoil.dev`.
 
 **The edgecoil name and mark are not licensed.** Remove the mark from the silkscreen of any boards
 you make or sell, and don't sell them under the edgecoil name.

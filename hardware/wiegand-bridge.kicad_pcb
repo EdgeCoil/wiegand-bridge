@@ -46430,7 +46430,7 @@
 			(justify mirror)
 		)
 	)
-	(gr_text "edgecoil.dev"
+	(gr_text "wiegand.edgecoil.dev"
 		(at 158 164.277087 0)
 		(layer "B.SilkS")
 		(uuid "3a0cd780-0add-4b17-b1c8-c60a13bcf0da")
@@ -46478,7 +46478,7 @@
 			(justify mirror)
 		)
 	)
-	(gr_text "rev 10  2026-10"
+	(gr_text "rev 10b  2026-10"
 		(at 158 162.077087 0)
 		(layer "B.SilkS")
 		(uuid "810d2f47-0b21-48af-af2e-87c24ebbff41")

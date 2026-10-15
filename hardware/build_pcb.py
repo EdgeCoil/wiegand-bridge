@@ -139,8 +139,8 @@ def labels(board):
     text(board, "JP3+JP4 = RS485 BIAS", pcbnew.ToMM(f.x) + 1.3, pcbnew.ToMM(f.y) - 3.6, 0.8, 0, pcbnew.B_SilkS)
     lh = logo(board, 158.0, 149.0, 28.0)
     text(board, "WIEGAND BRIDGE  v1.0", 158.0, 149.0 + lh / 2 + 2.0, 1.2, 0, pcbnew.B_SilkS)
-    text(board, "rev 10  2026-10", 158.0, 149.0 + lh / 2 + 4.0, 0.9, 0, pcbnew.B_SilkS)
-    text(board, "edgecoil.dev", 158.0, 149.0 + lh / 2 + 6.2, 1.2, 0, pcbnew.B_SilkS)
+    text(board, "rev 10b  2026-10", 158.0, 149.0 + lh / 2 + 4.0, 0.9, 0, pcbnew.B_SilkS)
+    text(board, "wiegand.edgecoil.dev", 158.0, 149.0 + lh / 2 + 6.2, 1.2, 0, pcbnew.B_SilkS)
 
 
 def main():
