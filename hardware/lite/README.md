@@ -53,6 +53,6 @@ whose routes failed on exactly those pads. `padgap.py` is the check; the 10 rema
 
 Upload `fab/wiegand-bridge-lite-gerbers.zip`, choose PCB Assembly (top side), then upload the BOM
 and CPL. **Check every polarised part's rotation in the CPL previewer** — the three LEDs, the four
-diodes (D2 is on a reversed-pin-order SMA footprint, pad 2 = cathode), the ICs, the module, the
+diodes (pad 1 = cathode on every SMA and SOD-123 part), the ICs, the module, the
 USB-C. The terminal J3 is through-hole: either add JLCPCB's THT assembly or leave it off the BOM
 and solder it by hand. The mating plug (KF2EDGK-3.5-8P) is not on the BOM; buy it separately.

@@ -3,7 +3,7 @@
 """Wiegand bridge LITE, revision 1 -- the netlist, as data.
 
 Source of truth for build_pcb.py. A stripped-down sibling of ../wiegand-bridge (rev 10/11): the
-smallest board that puts an ESP32 on a Wiegand reader (2026-10-21). It assumes the reader is
+smallest board that puts an ESP32 on a Wiegand reader (the author, 2026-10-21). It assumes the reader is
 powered already, runs from 12 V +-4 V (8-16 V), and keeps USB-C for programming (and bench power).
 Dropped: battery, screens, relay, switch inputs IN1-4, the reader 12 V boost/shed, the I/O expander,
 the W5500/Qwiic headers, the reader current sense.
@@ -21,9 +21,15 @@ the W5500/Qwiic headers, the reader current sense.
   figure 21: 10 uF in, 2x 22 uF out, 100 nF BST, 4.7 uH, EN tied to VIN, FB tied to VOUT.
   USB VBUS feeds the same buck through one SS34, so the board flashes and runs from the cable alone.
 - Part numbers reused from rev 10 wherever the cell is the same, so Basic parts stay Basic.
-- Diode pads: on the EasyEDA SMA footprints pad 1 = K for SS34/SS56/SMAJ15A ("-RD"), but the
-  SMAJ18A C499735 comes on the "-R-RD" (reversed) footprint, pad 2 = K -- checked against the
-  symbol and the silk band, 2026-10-21. Verify polarised parts in JLCPCB's CPL preview regardless.
+- Diode pads: on the EasyEDA SMA footprints pad 1 = K (SS34, SMAJ18A C19077538 -- the same "-RD"
+  footprint family as rev 10's SMAJ15A; checked against the symbol and the silk band). The first
+  draft used SMAJ18A C499735 on the mirrored "-R-RD" footprint (pad 2 = K); swapped 2026-10-21 for
+  the Preferred part (no JLCPCB loading fee, 350x the stock). Verify polarised parts in the CPL
+  preview regardless.
+- JLCPCB "Preferred" Extended parts carry no loading fee on Economic assembly (their FAQ, 2026-09):
+  the MMSZ5231B zeners and the SMAJ18A are Preferred. The other Extended parts (module, AP63203,
+  LVC2G17, USB-C, inductor, PTC, terminal) have no Basic or Preferred equivalent in JLCPCB's
+  library (searched 2026-10-21).
 - SW1/SW2 use pads 1 and 4 only: diagonal pads are always across the switch.
 """
 
@@ -37,7 +43,7 @@ FP = {
     "sot6bl": (WB, "SOT-23-6_L2.9-W1.6-P0.95-LS2.8-BL"),
     "sot23_2n7002": (WB, "SOT-23-3_L2.9-W1.3-P1.90-LS2.4-BR"),
     "sma_ss34": (WB, "SMA_L4.3-W2.6-LS5.2-RD"),
-    "sma_tvs_r": (WB, "SMA_L4.4-W2.6-LS5.0-R-RD"),
+    "sma_tvs": (WB, "SMA_L4.3-W2.6-LS5.0-RD"),
     "sod123": (WB, "SOD-123_L2.8-W1.6-LS3.7-RD"),
     "led_r": (WB, "LED0805-R-RD"),
     "led": (WB, "LED0805-RD"),
@@ -83,7 +89,7 @@ part("J3", "term8", "12V GND D0 D1 LED BEEP A B", "C441177",
       "7": "RS485_A", "8": "RS485_B"})   # mating plug KF2EDGK-3.5-8P, bought separately
 part("F1", "f1812", "0.5A 24V", "C516067", {"1": "+VIN_RAW", "2": "+VIN_F"})   # rev 10's reader fuse part
 part("D1", "sma_ss34", "SS34", "C8678", {"1": "+VIN", "2": "+VIN_F"})   # series reverse-polarity; 1 = K
-part("D2", "sma_tvs_r", "SMAJ18A", "C499735", {"2": "+VIN", "1": "GND"})   # 18 V standoff > 16 V max in; 2 = K
+part("D2", "sma_tvs", "SMAJ18A", "C19077538", {"1": "+VIN", "2": "GND"})   # 18 V standoff > 16 V max in; 1 = K. JLCPCB Preferred (no loading fee), 54k stock
 cap("C1", "10u25", "+VIN")
 
 # --- Block 2: buck to 3.3 V (AP63203, datasheet figure 21) ---------------------------------------

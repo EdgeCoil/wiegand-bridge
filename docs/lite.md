@@ -58,7 +58,7 @@ HA could be talked into replaying a card.
 ## Power
 
 - **8–16 V in**, terminal pins 1–2: 0.5 A 24 V PTC, SS34 in series for reverse polarity, SMAJ18A
-  (18 V standoff; it conducts from ~20 V), 10 µF.
+  C19077538 (18 V standoff; it conducts from ~20 V), 10 µF.
 - **AP63203** (fixed 3.3 V, 3.8–32 V in, 2 A, TSOT-26) as its datasheet's typical circuit: 10 µF
   in, 2 × 22 µF out, 100 nF bootstrap, 4.7 µH, EN tied to VIN, FB tied to VOUT. The part is
   flagged "not recommended for new designs" at LCSC; check stock before ordering. Fallback: the
@@ -108,15 +108,20 @@ mating plug KF2EDGK-3.5-8P, not on the BOM. The header's mouth overhangs the boa
   each cell to its terminal pin; every diode's cathode/anode matches its symbol; every IC pad
   assigned; BOM = CPL (72 placements, top side); gerbers, drills and CPL in one frame; USB D+/D−
   on IO20/IO19; strapping pins open, IO0 pulled up; all 29 part numbers in JLCPCB's library.
-- JLCPCB classes: Extended = the module, AP63203, the LVC2G17s, the zeners, SMAJ18A, the PTC, the
-  inductor, the USB-C and the terminal; Basic = everything else, including SP3485 and the SM712s.
+- JLCPCB classes (2026-10-21): fee-bearing Extended = the module, AP63203, the LVC2G17s, the PTC,
+  the inductor, the USB-C and the terminal (7 types; no Basic or Preferred equivalents exist in
+  JLCPCB's library for any of them); Preferred (no loading fee) = the zeners and the SMAJ18A; Basic =
+  everything else, including SP3485 and the SM712s.
+- Cost, JLCPCB Economic assembly, parts at the lowest tier: about US$9.45 of parts per board (the
+  module is US$5), US$21 of Extended fees and US$9.50 set-up and stencil per order, plus the PCB,
+  joints and shipping: roughly **US$125 for five boards, US$190 for ten**, before local tax.
 
 ## Before ordering
 
 1. Upload the gerbers alone and read JLCPCB's DFM result.
 2. In the assembly previewer, check every polarised part: D7/D8/D23 (two LED footprints with
-   opposite pin-1 ends), D1/D3 (SS34, pad 1 = cathode), **D2 (SMAJ18A on the reversed SMA
-   footprint, pad 2 = cathode)**, D5/D6/D24/D25, U1, U2, U4/U11, U9, J1.
+   opposite pin-1 ends), D1/D3 (SS34, pad 1 = cathode), **D2 (SMAJ18A, same SMA
+   footprint family as the SS34s, pad 1 = cathode)**, D5/D6/D24/D25, U1, U2, U4/U11, U9, J1.
 3. J3 is through-hole: THT assembly, or drop it from the BOM/CPL and hand-fit it.
 4. Print `fab/wiegand-bridge-lite-1to1.pdf` at 100 % and lay the plug and cables on it.
 
