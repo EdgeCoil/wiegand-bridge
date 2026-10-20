@@ -1,0 +1,280 @@
+# SPDX-FileCopyrightText: 2026 edgecoil
+# SPDX-License-Identifier: MIT
+# Wiegand bridge LITE -- the small board (hardware/lite/, docs/lite.md, rev 1).
+# Derived from wiegand-bridge.yaml (rev 10/11) with everything the lite board dropped removed.
+#
+# UNTESTED ON HARDWARE (2026-10-21): compiles clean against ESPHome 2026.8; no board exists yet.
+# Keep in step with hardware/lite/netlist.py.
+#
+# THIS DEVICE CAN ONLY REPORT in reader mode: no relay, no wire to the strike. Credentials go to
+# Home Assistant as events, HA validates them, and any unlock happens elsewhere, through whatever
+# actuator HA already controls.
+# Before adoption: "allow actions" OFF, device_id check in the HA automation (docs/design.md, Security).
+#
+# Pin map (ESP32-S3-MINI-1):
+#   IO4  D0 in (buffered)   IO6  D0 drive (open drain)   IO8  LED drive    IO10 LED in (buffered)
+#   IO5  D1 in (buffered)   IO7  D1 drive (open drain)   IO9  BEEP drive   IO11 BEEP in (buffered)
+#   IO38 RS-485 DE   IO43/44 RS-485 TX/RX   IO21 red FAULT   IO47 green OK   IO0 BOOT   IO19/20 USB
+# Every reader line is bidirectional: in reader mode the board reads D0/D1 and drives LED/BEEP; in
+# emulation mode (toward an access controller) it pulses D0/D1 and reads LED/BEEP. The drive FET
+# pulls the wire low when its output is ON. The board hears its own D0/D1 pulses on IO4/IO5.
+
+substitutions:
+  name: wiegand-bridge-lite
+  friendly_name: Wiegand bridge lite
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+
+esp32:
+  board: esp32-s3-devkitc-1
+  variant: esp32s3
+  flash_size: 4MB                # ESP32-S3-MINI-1-N4R2 (the variant JLCPCB stocks)
+  framework:
+    type: esp-idf
+
+psram:
+  mode: quad                     # N4R2: 2 MB quad PSRAM (IO26 is reserved for it, nothing is on it)
+  speed: 80MHz
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+api:
+  encryption:
+    key: !secret wiegand_bridge_lite_api_key
+  actions:
+    - action: feedback_granted
+      then:
+        - logger.log:
+            level: INFO
+            format: "feedback: granted"
+        # Three green pulses, then green held 3 s (bench 2026-10-20 on the full board).
+        - output.turn_on: reader_beep
+        - repeat:
+            count: 3
+            then:
+              - output.turn_on: reader_led
+              - delay: 300ms
+              - output.turn_off: reader_led
+              - delay: 200ms
+              - output.turn_off: reader_beep
+        - output.turn_on: reader_led
+        - delay: 3s
+        - output.turn_off: reader_led
+    - action: feedback_denied
+      then:
+        - logger.log:
+            level: INFO
+            format: "feedback: denied"
+        - repeat:
+            count: 3
+            then:
+              - output.turn_on: reader_beep
+              - delay: 100ms
+              - output.turn_off: reader_beep
+              - delay: 100ms
+    # Reader emulation: send a Wiegand frame on D0/D1 toward a controller. BENCH / DEMO ONLY --
+    # "allow actions" must be OFF once adopted, so HA cannot be talked into replaying a card.
+    - action: wiegand_send
+      variables:
+        bits: int                # frame length, MSB first, sent exactly as given (no parity added)
+        value: int
+      then:
+        - script.execute:
+            id: wiegand_tx
+            bits: !lambda "return bits;"
+            value: !lambda "return value;"
+    - action: wiegand_send_26
+      variables:
+        facility: int            # 8-bit facility code and 16-bit card number -> standard 26-bit frame
+        card: int
+      then:
+        - script.execute:
+            id: wiegand_tx
+            bits: 26
+            value: !lambda |-
+              uint32_t body = ((uint32_t)(facility & 0xFF) << 16) | (uint32_t)(card & 0xFFFF);
+              uint32_t ep = 0, op = 0;
+              for (int i = 12; i < 24; i++) ep ^= (body >> i) & 1;      // even parity over the first 12
+              for (int i = 0; i < 12; i++) op ^= (body >> i) & 1;       // odd parity over the last 12
+              return (int)((ep << 25) | (body << 1) | (op ^ 1));
+
+ota:
+  - platform: esphome
+    password: !secret wiegand_bridge_lite_ota_password
+
+logger:
+  level: INFO
+  hardware_uart: USB_SERIAL_JTAG   # UART0 (IO43/44) is the RS-485 port
+  # NEVER raise to DEBUG in service: debug logs the Wiegand frames, i.e. the codes.
+
+# RS-485 / OSDP port on UART0 (SP3485, DE on IO38, held in receive by R65). No OSDP component
+# exists in ESPHome yet; the UART is declared so the pins are claimed and the port can be bench-tested.
+uart:
+  - id: rs485
+    tx_pin: GPIO43
+    rx_pin: GPIO44
+    baud_rate: 9600
+
+wiegand:
+  - id: reader
+    d0: GPIO4                    # via U4 74LVC2G17
+    d1: GPIO5
+    on_key:                      # keys reach pin_input through its source_id, AFTER this trigger runs
+      then:
+        # The leaflet reader's bell key IS '#' (11). '#' with no digits typed rings the doorbell;
+        # '#' after 1-3 digits clears the entry, because key_collector keeps a too-short entry
+        # (so "12#3456#" would otherwise submit 123456). 4+ digits: key_collector submits it.
+        - lambda: |-
+            const uint32_t now = millis();
+            if (now - id(last_key_ms) > 10000) id(digits_typed) = 0;   // mirrors pin_input's timeout
+            id(last_key_ms) = now;
+            if (x <= 9) {
+              id(digits_typed)++;
+            } else if (x == 10) {                                      // '*'
+              id(digits_typed) = 0;
+            } else if (x == 11) {                                      // '#'
+              if (id(digits_typed) >= 4) {
+                id(last_submit_ms) = now;
+              } else if (id(digits_typed) > 0) {
+                id(pin_input).clear();
+              } else if (now - id(last_submit_ms) > 2000) {            // a habitual second '#' is not a ring
+                id(doorbell).trigger("ring");
+              }
+              id(digits_typed) = 0;
+            }
+    on_tag:
+      then:
+        - homeassistant.event:
+            event: esphome.wiegand_bridge
+            data:
+              type: fob
+              value: !lambda "return x;"
+
+key_collector:
+  - id: pin_input
+    source_id: reader
+    min_length: 4
+    max_length: 10
+    end_keys: "#"
+    end_key_required: true
+    clear_keys: "*"
+    timeout: 10s
+    # Masked live entry: one '*' per digit typed, empty on clear/timeout/submit. NEVER the digits --
+    # this is an entity, so once adopted it lands in HA's history.
+    on_progress:
+      then:
+        - text_sensor.template.publish:
+            id: entry_progress
+            state: !lambda "return std::string(x.size(), '*');"
+    on_result:
+      then:
+        - homeassistant.event:
+            event: esphome.wiegand_bridge
+            data:
+              type: code
+              value: !lambda "return x.c_str();"
+
+output:
+  - platform: gpio
+    id: reader_led
+    pin: GPIO8                   # Q1 -> terminal LED: on = wire pulled low (the leaflet reader shows green)
+  - platform: gpio
+    id: reader_beep
+    pin: GPIO9                   # Q2 -> terminal BEEP
+  - platform: gpio
+    id: d0_tx
+    pin: GPIO6                   # Q3 -> terminal D0 (emulation)
+  - platform: gpio
+    id: d1_tx
+    pin: GPIO7                   # Q4 -> terminal D1 (emulation)
+  - platform: gpio
+    id: status_ok_led
+    pin:
+      number: GPIO47
+      inverted: true             # D23 green "OK" sinks into the pin
+
+script:
+  - id: wiegand_tx
+    mode: queued
+    parameters:
+      bits: int
+      value: int
+    then:
+      - lambda: |-
+          // Wiegand timing: 50 us low pulse, 2 ms between bits; a 1 goes on D1, a 0 on D0.
+          for (int i = bits - 1; i >= 0; i--) {
+            auto *line = ((value >> i) & 1) ? id(d1_tx) : id(d0_tx);
+            line->turn_on();
+            delayMicroseconds(50);
+            line->turn_off();
+            delayMicroseconds(2000);
+          }
+          ESP_LOGI("wiegand", "sent %d bits", bits);        // the value itself is a credential: never logged
+
+# Status pair: red FAULT = ESPHome's status LED (slow blink warning, fast blink error); green OK =
+# steady while a client (Home Assistant) is connected to the API.
+interval:
+  - interval: 1s
+    then:
+      - if:
+          condition:
+            api.connected:
+          then:
+            - output.turn_on: status_ok_led
+          else:
+            - output.turn_off: status_ok_led
+
+light:
+  - platform: status_led
+    name: "${friendly_name} status"
+    pin:
+      number: GPIO21
+      inverted: true             # D8 red FAULT sinks into the pin
+
+binary_sensor:
+  - platform: status
+    name: "${friendly_name} online"
+  # Emulation mode: what a controller is doing to the LED / BEEP wires (buffered, low = asserted).
+  - platform: gpio
+    name: "${friendly_name} LED line"
+    entity_category: diagnostic
+    pin: {number: GPIO10, inverted: true}
+    filters: [delayed_on_off: 5ms]
+  - platform: gpio
+    name: "${friendly_name} BEEP line"
+    entity_category: diagnostic
+    pin: {number: GPIO11, inverted: true}
+    filters: [delayed_on_off: 5ms]
+
+sensor:
+  - platform: wifi_signal
+    name: "${friendly_name} RSSI"
+    update_interval: 300s
+
+globals:
+  - id: digits_typed              # doorbell / short-entry logic in the wiegand on_key
+    type: int
+    initial_value: '0'
+  - id: last_key_ms
+    type: uint32_t
+    initial_value: '0'
+  - id: last_submit_ms
+    type: uint32_t
+    initial_value: '0'
+
+text_sensor:
+  - platform: template
+    id: entry_progress
+    name: "${friendly_name} entry"
+    icon: mdi:dialpad
+
+event:
+  - platform: template
+    id: doorbell
+    name: "${friendly_name} doorbell"
+    device_class: doorbell
+    event_types: [ring]

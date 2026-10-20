@@ -32,6 +32,16 @@ door, where anyone can reach it, so the part that unlocks anything stays somewhe
 - Optional **relay** footprint, not fitted by default (see *Security* in the design doc)
 - 90 × 95 mm, 4 layers, assembled by JLCPCB
 
+## LITE — under development
+
+A 42 × 44 mm sibling for the case where the reader already has its supply: ESP32-S3-MINI-1,
+8–16 V in, USB-C, one 8-way pluggable terminal, D0/D1/LED/BEEP all bidirectional (it can also
+emulate a reader toward an access controller), RS-485 kept. **Designed, routed and checked; no
+board made yet.** [`docs/lite.md`](docs/lite.md), [`hardware/lite/`](hardware/lite/),
+[`firmware/wiegand-bridge-lite.yaml`](firmware/wiegand-bridge-lite.yaml).
+
+![Size comparison](hardware/lite/fab/size-comparison.png)
+
 ## Repository layout
 
 | Path | What it is |
@@ -39,9 +49,11 @@ door, where anyone can reach it, so the part that unlocks anything stays somewhe
 | [`hardware/`](hardware/) | The board, **generated from Python**: `netlist.py` is the source of truth |
 | [`hardware/fab/`](hardware/fab/) | Ready-to-order outputs: Gerbers, BOM, CPL, schematic and assembly PDFs, renders |
 | [`hardware/sim/`](hardware/sim/) | ngspice checks of the analogue corners |
-| [`firmware/`](firmware/) | ESPHome configuration |
+| [`hardware/lite/`](hardware/lite/) | **The LITE board (under development)**: its own `netlist.py`/`placement.py`, the same scripts trimmed, `fab/` outputs |
+| [`firmware/`](firmware/) | ESPHome configurations (full board, and `wiegand-bridge-lite.yaml`) |
 | [`docs/design.md`](docs/design.md) | How it works, pin map, connectors, security notes, bench tests |
 | [`docs/breadboard.md`](docs/breadboard.md) | A through-hole breadboard version for trying the reader first |
+| [`docs/lite.md`](docs/lite.md) | The LITE board: what it is, the bidirectional line cell, pin map, results, checks before ordering |
 
 ## Building the board
 

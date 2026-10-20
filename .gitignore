@@ -3,6 +3,7 @@ __pycache__/
 *-backups/
 fp-info-cache
 hardware/fab/schematic/
+hardware/lite/fab/schematic/
 hardware/lib/wb.3dshapes/
 secrets.yaml
 .esphome/
