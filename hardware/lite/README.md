@@ -13,6 +13,7 @@ rev 11 tree was not worth refactoring for this.
 | `build_pcb.py` | Makes `wiegand-bridge-lite.kicad_pcb`, unrouted, from the two files above |
 | `route.py` | Thermal vias under the module, the USB-C VBUS pad-pair hand route, GND fan-out, Freerouting, ground pours |
 | `padgap.py` | Pre-route: pads of different nets closer than 0.25 mm (new for this board) |
+| `verify.py` | **Every file-based check in one run** (DRC, audit, pad gaps, joint spacing, silk sizes, firmware↔netlist, polarity, open pads, BOM/CPL/gerbers, JLCPCB classes and stock); `--offline` skips the library query |
 | `stitch.py`, `via_fix.py`, `gndcheck.py`, `dfm_post.py`, `audit.py` | Post-route, as the full board; `audit.py` has no screen/battery sections |
 | `schematic.py`, `fab.py`, `finish_net.py`, `widen.py`, `plane_connect.py` | As the full board, names changed |
 | `lib/`, `art/` | **Symlinks** into `../` (the full board) — one footprint library (the new parts were fetched into it) and one mark |
@@ -40,6 +41,7 @@ python3 schematic.py
 kicad-cli pcb export pdf --layers F.Mask,F.Silkscreen,F.Courtyard,Edge.Cuts --mode-single \
     --black-and-white --ibt -o fab/wiegand-bridge-lite-1to1.pdf wiegand-bridge-lite.kicad_pcb
 kicad-cli pcb drc wiegand-bridge-lite.kicad_pcb
+python3 verify.py                    # everything above plus the cross-checks; must end ALL CHECKS PASSED
 ```
 
 **Space parts by pad extents, not courtyards.** KiCad's 0603 courtyard is 3.0 × 1.5 mm (generous)
