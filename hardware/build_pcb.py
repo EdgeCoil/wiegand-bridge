@@ -186,12 +186,12 @@ def main():
         assert fp is not None, (ref, lib, name)
         fp.SetReference(ref)
         fp.SetValue(value)
-        if ref == "J14":                       # EasyEDA's DC-005 model sits backwards (mouth inboard) and off
-            models = fp.Models()             # its outline: render only, the footprint and pads are right
-            for k in range(len(models)):     # (measured 2026-10-21; editing the vector in place does not save)
-                m = models[k]
-                m.m_Rotation.z = 270.0
-                m.m_Offset.x, m.m_Offset.y, m.m_Offset.z = -1.4, 7.9, 0.0
+        if ref == "J14":                       # EasyEDA's DC-005 model is mirrored against the footprint and
+            models = fp.Models()             # mounted with its mouth inboard: mirror it (negative scale) and
+            for k in range(len(models)):     # shift it onto the outline. Render only; the pads are right.
+                m = models[k]                # (Measured by rendering candidates, 2026-10-21. Assign the element
+                m.m_Scale.y = -1.0           # back: editing fp.Models()[k] in place does not save.)
+                m.m_Offset.x, m.m_Offset.y, m.m_Offset.z = -1.6, -1.4, 0.0
                 models[k] = m
         for f in fp.GetFields():
             if not f.IsReference():
