@@ -19773,14 +19773,13 @@
 		)
 		(embedded_fonts no)
 		(model "${KIPRJMOD}/lib/wb.3dshapes/DC-IN-TH_DC-5520-1.wrl"
-			(offset
-				(xyz 0 0 0)
+			(offset (xyz -1.4 7.9 0)
 			)
 			(scale
 				(xyz 1 1 1)
 			)
 			(rotate
-				(xyz 0 0 90)
+				(xyz 0 0 270)
 			)
 		)
 	)
