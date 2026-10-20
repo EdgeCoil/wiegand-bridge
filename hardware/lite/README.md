@@ -16,6 +16,7 @@ rev 11 tree was not worth refactoring for this.
 | `verify.py` | **Every file-based check in one run** (DRC, audit, pad gaps, joint spacing, silk sizes, firmware↔netlist, polarity, open pads, BOM/CPL/gerbers, JLCPCB classes and stock); `--offline` skips the library query |
 | `stitch.py`, `via_fix.py`, `gndcheck.py`, `dfm_post.py`, `audit.py` | Post-route, as the full board; `audit.py` has no screen/battery sections |
 | `schematic.py`, `fab.py`, `finish_net.py`, `widen.py`, `plane_connect.py` | As the full board, names changed |
+| `wiegand-bridge-lite.kicad_pro` | **Carries the netclasses** (signals 0.2 mm / 0.15 mm, power 0.5 mm): without it `kicad-cli pcb drc` falls back to 0.2 mm clearance and reports ~90 false clearance errors (seen 2026-10-21 when the project file was left out of a copy) |
 | `lib/`, `art/` | **Symlinks** into `../` (the full board) — one footprint library (the new parts were fetched into it) and one mark |
 
 Differences from the full board's scripts, so a diff is not a surprise: 2 mounting holes; the
