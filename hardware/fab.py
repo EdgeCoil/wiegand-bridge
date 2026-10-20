@@ -18,6 +18,10 @@ import time
 # and zip entries with local wall time.
 os.environ["TZ"] = "UTC"
 time.tzset()
+# KiCad's stock 0603/0805 footprints point their 3D models at KICAD9_3DMODEL_DIR (the 6 GB
+# kicad-packages3d, not installed here). The three files they need are fetched into this directory
+# from gitlab.com/kicad/libraries/kicad-packages3D; without them the passives render as bare pads.
+os.environ.setdefault("KICAD9_3DMODEL_DIR", os.path.expanduser("~/.local/share/kicad/9.0/3dmodels"))
 from collections import defaultdict
 
 import pcbnew

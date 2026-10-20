@@ -87,7 +87,10 @@ Tools used: KiCad 9.0, Freerouting 2.4.1 (OpenJDK), `easyeda2kicad` 1.0.1 (for `
 
 **3D models are not included** (about 60 MB). The renders in `fab/` show the board with them. To
 fetch them, run `easyeda2kicad --3d --lcsc_id=<part> --output hardware/lib/wb` for the LCSC part
-numbers in the BOM.
+numbers in the BOM. The 0603/0805 passives use KiCad's stock footprints, whose models come from
+`kicad-packages3d`; `fab.py` looks for them in `~/.local/share/kicad/9.0/3dmodels` (three files:
+`Resistor_SMD.3dshapes/R_0603_1608Metric`, `Capacitor_SMD.3dshapes/C_0603_1608Metric` and
+`C_0805_2012Metric`, `.step` + `.wrl`, from gitlab.com/kicad/libraries/kicad-packages3D).
 
 ## Ordering
 
