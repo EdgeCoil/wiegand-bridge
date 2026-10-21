@@ -9,7 +9,9 @@
 # THIS DEVICE CAN ONLY REPORT in reader mode: no relay, no wire to the strike. Credentials go to
 # Home Assistant as events, HA validates them, and any unlock happens elsewhere, through whatever
 # actuator HA already controls.
-# Before adoption: "allow actions" OFF, device_id check in the HA automation (docs/design.md, Security).
+# Before adoption: "allow actions" OFF (that switch gates device -> HA service calls; it does not
+# touch the events this file sends), device_id check in the HA automation (docs/design.md, Security), and
+# the emulation package below REMOVED -- its actions are HA -> device and nothing in HA gates them.
 #
 # Pin map (ESP32-S3-MINI-1):
 #   IO4  D0 in (buffered)   IO6  D0 drive (open drain)   IO8  LED drive    IO10 LED in (buffered)
@@ -76,31 +78,13 @@ api:
               - delay: 100ms
               - output.turn_off: reader_beep
               - delay: 100ms
-    # Reader emulation: send a Wiegand frame on D0/D1 toward a controller. BENCH / DEMO ONLY --
-    # "allow actions" must be OFF once adopted, so HA cannot be talked into replaying a card.
-    - action: wiegand_send
-      variables:
-        bits: int                # frame length, MSB first, sent exactly as given (no parity added)
-        value: int
-      then:
-        - script.execute:
-            id: wiegand_tx
-            bits: !lambda "return bits;"
-            value: !lambda "return value;"
-    - action: wiegand_send_26
-      variables:
-        facility: int            # 8-bit facility code and 16-bit card number -> standard 26-bit frame
-        card: int
-      then:
-        - script.execute:
-            id: wiegand_tx
-            bits: 26
-            value: !lambda |-
-              uint32_t body = ((uint32_t)(facility & 0xFF) << 16) | (uint32_t)(card & 0xFFFF);
-              uint32_t ep = 0, op = 0;
-              for (int i = 12; i < 24; i++) ep ^= (body >> i) & 1;      // even parity over the first 12
-              for (int i = 0; i < 12; i++) op ^= (body >> i) & 1;       // odd parity over the last 12
-              return (int)((ep << 25) | (body << 1) | (op ^ 1));
+
+# Reader emulation (wiegand_send / wiegand_send_26 actions, the wiegand_tx script) lives in its own
+# package: BENCH / DEMO ONLY. For a board that goes near a door comment out BOTH lines below (an
+# empty `packages:` is a config error) -- see the package file for why no HA setting can make those
+# actions safe. Both variants compiled clean on 2026-10-21.
+packages:
+  emulation: !include wiegand-bridge-lite-emulation.yaml
 
 ota:
   - platform: esphome
@@ -192,28 +176,14 @@ output:
     id: d1_tx
     pin: GPIO7                   # Q4 -> terminal D1 (emulation)
   - platform: gpio
+    id: rs485_de
+    pin: GPIO38                  # SP3485 DE//RE: claimed and driven low (receive). R65 holds it low
+                                 # through reset; nothing transmits until an OSDP component exists.
+  - platform: gpio
     id: status_ok_led
     pin:
       number: GPIO47
       inverted: true             # D23 green "OK" sinks into the pin
-
-script:
-  - id: wiegand_tx
-    mode: queued
-    parameters:
-      bits: int
-      value: int
-    then:
-      - lambda: |-
-          // Wiegand timing: 50 us low pulse, 2 ms between bits; a 1 goes on D1, a 0 on D0.
-          for (int i = bits - 1; i >= 0; i--) {
-            auto *line = ((value >> i) & 1) ? id(d1_tx) : id(d0_tx);
-            line->turn_on();
-            delayMicroseconds(50);
-            line->turn_off();
-            delayMicroseconds(2000);
-          }
-          ESP_LOGI("wiegand", "sent %d bits", bits);        // the value itself is a credential: never logged
 
 # Status pair: red FAULT = ESPHome's status LED (slow blink warning, fast blink error); green OK =
 # steady while a client (Home Assistant) is connected to the API.

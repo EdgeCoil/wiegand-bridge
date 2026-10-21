@@ -1,0 +1,62 @@
+# SPDX-FileCopyrightText: 2026 edgecoil
+# SPDX-License-Identifier: MIT
+# Reader emulation for the Wiegand bridge LITE: send a Wiegand frame on D0/D1 toward an access
+# controller. BENCH / DEMO ONLY -- a package, so the door build simply does not contain it.
+#
+# Why a package and not a toggle: these are user-defined API actions (HA -> device). HA registers
+# them as services (esphome.<name>_wiegand_send_26) whenever the device is connected, and the
+# ESPHome integration's "Allow the device to perform Home Assistant actions" switch does NOT gate
+# them -- it gates the opposite direction (device -> HA service calls). So any HA automation, any HA
+# user who can call services, or any client holding the API key could replay a card number through
+# the board, and the board hears its own pulses on IO4/IO5 (the frame arrives as a tag and goes to
+# the HA automation like a presented fob). The only protection is for the actions not to exist on
+# a board that is near a door: keep this package out of that build.
+#
+# Limits: `value` is an int32 (ESPHome API action variables), so frames are at most 31 bits -- 26-bit
+# is what the 26-bit helper sends; 34/37-bit would need the value split in two. The lambda busy-waits
+# ~53 ms per 26-bit frame inside the API handler (ESPHome logs a "took a long time" warning); fine
+# on the bench.
+
+api:
+  actions:
+    - action: wiegand_send
+      variables:
+        bits: int                # frame length (<= 31), MSB first, sent exactly as given (no parity added)
+        value: int
+      then:
+        - script.execute:
+            id: wiegand_tx
+            bits: !lambda "return bits;"
+            value: !lambda "return value;"
+    - action: wiegand_send_26
+      variables:
+        facility: int            # 8-bit facility code and 16-bit card number -> standard 26-bit frame
+        card: int
+      then:
+        - script.execute:
+            id: wiegand_tx
+            bits: 26
+            value: !lambda |-
+              uint32_t body = ((uint32_t)(facility & 0xFF) << 16) | (uint32_t)(card & 0xFFFF);
+              uint32_t ep = 0, op = 0;
+              for (int i = 12; i < 24; i++) ep ^= (body >> i) & 1;      // even parity over the first 12
+              for (int i = 0; i < 12; i++) op ^= (body >> i) & 1;       // odd parity over the last 12
+              return (int)((ep << 25) | (body << 1) | (op ^ 1));
+
+script:
+  - id: wiegand_tx
+    mode: queued
+    parameters:
+      bits: int
+      value: int
+    then:
+      - lambda: |-
+          // Wiegand timing: 50 us low pulse, 2 ms between bits; a 1 goes on D1, a 0 on D0.
+          for (int i = bits - 1; i >= 0; i--) {
+            auto *line = ((value >> i) & 1) ? id(d1_tx) : id(d0_tx);
+            line->turn_on();
+            delayMicroseconds(50);
+            line->turn_off();
+            delayMicroseconds(2000);
+          }
+          ESP_LOGI("wiegand", "sent %d bits", bits);        // the value itself is a credential: never logged

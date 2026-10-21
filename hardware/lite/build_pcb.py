@@ -248,8 +248,40 @@ def main():
         board.Add(a)
 
     labels(board)
+    antenna_keepout(board)
     pcbnew.SaveBoard(OUT, board)
     print("saved", OUT, len(PARTS), "footprints", len(nets), "nets")
+
+
+# The MINI-1's antenna is the top 5.05 mm of the module (datasheet fig. 11-1). With U1 at its place
+# the module's top edge sits 4.5 mm above the board edge, so the last ~0.6 mm of the antenna area
+# plus the gap to the GND pads 46-60 lies OVER the board. Espressif wants no copper there on any
+# layer: this rule area keeps the pours, tracks and vias out of the strip between the edge and those
+# pads (their tops are at y = 100.97), the module's full width plus 1 mm each side. Found missing
+# in the 2026-10-21 audit -- the plan called for it and the ground pours ran to the edge.
+ANTENNA_KEEPOUT_DEPTH = 0.95     # mm below the top edge; pads 46-60 start at 0.97
+
+
+def antenna_keepout(board):
+    u1 = board.FindFootprintByReference("U1")
+    ux = pcbnew.ToMM(u1.GetPosition().x)
+    x0, y0, w, h = BOARD
+    x1, x2 = ux - 7.7 - 1.0, ux + 7.7 + 1.0
+    z = pcbnew.ZONE(board)
+    z.SetIsRuleArea(True)
+    z.SetDoNotAllowCopperPour(True)
+    z.SetDoNotAllowTracks(True)
+    z.SetDoNotAllowVias(True)
+    z.SetDoNotAllowPads(False)
+    z.SetDoNotAllowFootprints(False)
+    z.SetZoneName("antenna_keepout")
+    z.SetLayerSet(pcbnew.LSET.AllCuMask(board.GetCopperLayerCount()))
+    pts = ((x1, y0 - 1.0), (x2, y0 - 1.0), (x2, y0 + ANTENNA_KEEPOUT_DEPTH), (x1, y0 + ANTENNA_KEEPOUT_DEPTH))
+    z.AppendCorner(pcbnew.VECTOR2I(mm(pts[0][0]), mm(pts[0][1])), -1)
+    for x, y in pts[1:]:
+        z.AppendCorner(pcbnew.VECTOR2I(mm(x), mm(y)), -1)
+    board.Add(z)
+    return z
 
 
 if __name__ == "__main__":

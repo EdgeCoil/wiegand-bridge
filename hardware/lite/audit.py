@@ -6,12 +6,13 @@
    come within 0.3 mm, so a malformed courtyard (K1's) cannot hide a clash.
 2. Narrowest track on every net that carries real current, against the width it needs.
 3. Parts inside an M3 screw-head keep-out (4.0 mm radius from each hole centre).
-4. Tall parts inside the area a plugged-in OLED covers (8.5 mm socket height).
-5. Copper near the ESP32 antenna on the board edge.
-6. Silkscreen legibility (rev 11, after the rev 10 boards' labels were found "blocked or overcrowded"): every silk text against other texts, pads (the mask opening clips it), other parts'
-   silk outlines, fitted parts' bodies (hidden once assembled), the board edge, and -- for the
-   status LEDs and their labels -- the area a plugged-in OLED covers. KiCad's DRC checks none of
-   the last three, and its silk_overlap is flooded by terminal blocks' interlocking outlines.
+4. (the full board's OLED-cover check; no screen here)
+5. Tracks within 3 mm of the ESP32 antenna's board edge (the copper-free strip under the antenna
+   itself is a rule area, checked by verify.py section 11).
+6. Silkscreen legibility (the rev 10 full boards' labels were "blocked or overcrowded"): every silk
+   text against other texts, pads (the mask opening clips it), other parts' silk outlines, fitted
+   parts' bodies (hidden once assembled) and the board edge. KiCad's DRC checks none of the last
+   three, and its silk_overlap is flooded by connector outlines.
 
     python3 audit.py            # all sections (on the routed board)
     python3 audit.py --silk     # section 6 only; works on the unrouted board straight from build_pcb.py
@@ -192,6 +193,6 @@ zone = pcbnew.BOX2I(pcbnew.VECTOR2I(pcbnew.FromMM(ant[0]), pcbnew.FromMM(ant[1])
 for t in board.GetTracks():          # the track itself, not its bounding box (rev 11: a diagonal's box
     if t.HitTest(zone, False, 0):    # reached into the zone while the track passed 1.4 mm outside it)
         hits.add(t.GetNetname())
-print(f"   tracks in {ant}: {sorted(hits) or 'none'}  (ground pour is also present up to the edge)")
+print(f"   tracks in {ant}: {sorted(hits) or 'none'}  (the strip under the antenna is a keep-out: verify.py 11)")
 
 silk_audit()

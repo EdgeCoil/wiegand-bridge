@@ -50,7 +50,7 @@ board made yet.** [`docs/lite.md`](docs/lite.md), [`hardware/lite/`](hardware/li
 | [`hardware/fab/`](hardware/fab/) | Ready-to-order outputs: Gerbers, BOM, CPL, schematic and assembly PDFs, renders |
 | [`hardware/sim/`](hardware/sim/) | ngspice checks of the analogue corners |
 | [`hardware/lite/`](hardware/lite/) | **The LITE board (under development)**: its own `netlist.py`/`placement.py`, the same scripts trimmed, `fab/` outputs |
-| [`firmware/`](firmware/) | ESPHome configurations (full board, and `wiegand-bridge-lite.yaml`) |
+| [`firmware/`](firmware/) | ESPHome configurations (full board; `wiegand-bridge-lite.yaml` plus its bench-only `wiegand-bridge-lite-emulation.yaml` package) |
 | [`docs/design.md`](docs/design.md) | How it works, pin map, connectors, security notes, bench tests |
 | [`docs/breadboard.md`](docs/breadboard.md) | A through-hole breadboard version for trying the reader first |
 | [`docs/lite.md`](docs/lite.md) | The LITE board: what it is, the bidirectional line cell, pin map, results, checks before ordering |

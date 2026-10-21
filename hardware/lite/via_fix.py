@@ -3,15 +3,15 @@
 """Move GND vias that sit inside a pad's solder-mask opening (DFM review 2026-10-11).
 
 route.fanout_gnd placed vias 0.9 mm from a pad's CENTRE, which on big pads (SMA diodes, 1206 caps,
-U2 pin 7, USB-C GND) is still inside the pad: solder wicks down the open hole. Exposed-pad thermal
-vias (U1.41, U2.9, U3.11, U5.9) are deliberate and left alone. Each offending via and its stub are
+U2 pin 7, USB-C GND) is still inside the pad: solder wicks down the open hole. The module's thermal
+vias (U1's centre GND pads) are deliberate and left alone. Each offending via and its stub are
 removed and replaced by a via whose ring clears the pad's opening (+0.1 mm), with a 0.3 mm stub from
 the pad centre, both checked against finish_net's obstacle grid (all layers for the via, the pad's
 layer for the stub). KiCad DRC is the check afterwards.
 
     python3 via_fix.py           # report only
     python3 via_fix.py --apply
-    python3 via_fix.py --pads R70.2,JP4.2     # just add a via for these GND pads
+    python3 via_fix.py --pads C16.2,C41.2     # just add a via for these GND pads
 """
 import math
 import os
@@ -67,7 +67,9 @@ def main(apply):
     for v, ref, p in bad:
         print(f"  via {ToMM(v.GetPosition().x):.2f},{ToMM(v.GetPosition().y):.2f} in {ref}.{p.GetNumber()} ({p.GetNetname()})")
     print(len(bad), "vias inside pad openings")
-    if not apply or not bad:
+    if not apply:
+        sys.exit(1 if bad else 0)
+    if not bad:
         return
     targets = [(ref, p.GetNumber(), (ToMM(v.GetPosition().x), ToMM(v.GetPosition().y))) for v, ref, p in bad]
     # remove the vias and any GND stub ending on them, then reload (SWIG lists go stale after Remove)

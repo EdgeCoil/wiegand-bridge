@@ -15,6 +15,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 HERE = os.path.dirname(os.path.abspath(__file__))
 PCB = os.path.join(HERE, "wiegand-bridge-lite.kicad_pcb")
 WORK = os.environ.get("ROUTE_WORK", "/tmp")
+os.makedirs(WORK, exist_ok=True)
 JAVA = "/usr/lib/jvm/java-25-openjdk-amd64/bin/java"
 FR = os.path.expanduser("~/.local/share/freerouting/freerouting-2.4.1.jar")
 mm = pcbnew.FromMM
@@ -73,53 +74,6 @@ def track(board, pts, net, w, layer=pcbnew.F_Cu):
         t.SetNet(n)
         t.SetLocked(True)
         board.Add(t)
-
-
-def preroute(board):
-    """Hand routes where the autorouter cannot cope: U3's 0.5 mm pitch and the USB-C VBUS pair."""
-    u3 = board.FindFootprintByReference("U3").GetPosition()
-    ox, oy = pcbnew.ToMM(u3.x), pcbnew.ToMM(u3.y)
-
-    def P(dx, dy):
-        return (ox + dx, oy + dy)
-    # pins 3, 7, 9 (GND) into the exposed pad
-    track(board, [P(-1.4, 0.0), P(-0.6, 0.0)], "GND", 0.2)
-    track(board, [P(1.4, 0.5), P(0.6, 0.5)], "GND", 0.2)
-    track(board, [P(1.4, -0.5), P(0.6, -0.5)], "GND", 0.2)
-    # VSYS: pins 6 and 8 round the outside of pin 7, then under the IC to pin 5 and C8
-    track(board, [P(1.4, 1.0), P(2.15, 1.0), P(2.15, 0.0), P(1.4, 0.0)], "VSYS", 0.25)
-    track(board, [P(2.15, 1.0), P(2.15, 2.6), P(-1.95, 2.6)], "VSYS", 0.3)
-    track(board, [P(-1.4, 1.0), P(-1.95, 1.0), P(-1.95, 2.6), P(-2.15, 3.6)], "VSYS", 0.3)
-    # L1 / L2 to the inductor at the left; VOUT up to C9
-    track(board, [P(-1.4, 0.5), P(-2.5, 0.5), P(-3.1, 1.1)], "U3_L1", 0.3)
-    track(board, [P(-1.4, -0.5), P(-2.5, -0.5), P(-3.1, -1.1)], "U3_L2", 0.3)
-    track(board, [P(-1.4, -1.0), P(-1.95, -1.0), P(-1.95, -3.0), P(-2.15, -3.6)], "+3V3", 0.3)
-    # USB-C VBUS: A4B9 and B4A9 joined on the bottom layer
-    j1 = {p.GetNumber(): p.GetPosition() for p in board.FindFootprintByReference("J1").Pads()}
-    a, b = j1["A4B9"], j1["B4A9"]
-    ax, ay, bx, by = (pcbnew.ToMM(v) for v in (a.x, a.y, b.x, b.y))
-    vbus = board.FindNet("VBUS")
-    # straight out along the pad axis: a diagonal stub runs into the neighbouring GND pad.
-    # Vias 2.4 mm out (rev 10) so CC2 can drop to the bottom layer inside them.
-    track(board, [(ax, ay), (ax + 2.4, ay)], "VBUS", 0.4)
-    track(board, [(bx, by), (bx + 2.4, by)], "VBUS", 0.4)
-    via(board, mm(ax + 2.4), mm(ay), vbus)
-    via(board, mm(bx + 2.4), mm(by), vbus)
-    track(board, [(ax + 2.4, ay), (bx + 2.4, by)], "VBUS", 0.5, pcbnew.B_Cu)
-    # CC2 (B5) is boxed in by the D+/D- exits and the VBUS stub: via beside the pad, down on the
-    # bottom layer, up again beside R2 (placed below the connector for this).
-    c = j1["B5"]
-    cx, cy = pcbnew.ToMM(c.x), pcbnew.ToMM(c.y)
-    r2 = {p.GetNumber(): p.GetPosition() for p in board.FindFootprintByReference("R2").Pads()}
-    rx, ry = pcbnew.ToMM(r2["1"].x), pcbnew.ToMM(r2["1"].y)
-    cc2 = board.FindNet("CC2")
-    v1 = (cx + 1.25, cy - 0.1)
-    v2 = (v1[0], ry - 1.3)
-    track(board, [(cx, cy), v1], "CC2", 0.2)
-    via(board, mm(v1[0]), mm(v1[1]), cc2)
-    track(board, [v1, v2], "CC2", 0.25, pcbnew.B_Cu)
-    via(board, mm(v2[0]), mm(v2[1]), cc2)
-    track(board, [v2, (rx, ry)], "CC2", 0.25)
 
 
 def preroute_usb(board):

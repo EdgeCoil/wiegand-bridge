@@ -18,10 +18,7 @@ import pcbnew
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PCB = os.path.join(HERE, "wiegand-bridge-lite.kicad_pcb")
-TARGET = {n: float(os.environ.get("WIDEN_TO", "0.6")) for n in ("+VIN_RAW", "+VIN_F", "+VIN")}
-TARGET["VSYS"] = min(0.45, float(os.environ.get("WIDEN_TO", "0.45")))
-for n in ("RELAY_COM", "RELAY_NO", "RELAY_NC"):   # 2 A contacts
-    TARGET[n] = max(0.8, float(os.environ.get("WIDEN_TO", "0.8")) if False else 0.8)
+TARGET = {n: float(os.environ.get("WIDEN_TO", "0.5")) for n in ("+VIN_RAW", "+VIN_F", "+VIN", "U2_SW", "+3V3", "VBUS")}
 mm = pcbnew.FromMM
 
 

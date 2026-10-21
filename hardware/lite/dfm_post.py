@@ -2,12 +2,10 @@
 # SPDX-License-Identifier: MIT
 """Post-route DFM/thermal fixes (reviews of 2026-10-11). Run after routing and stitching, before fab.py.
 
-1. Paste under the exposed pads (U2, U3, U5) is redrawn so it keeps 0.15 mm off every via ring:
-   open vias under paste wick the solder away and leave voids. The pad's own paste is turned off
-   and replaced by a polygon on F.Paste = pad - (via rings + 0.15 mm), inset 0.05 mm. U3's stock
-   paste-only aperture pads (laid out for KiCad's via grid, not route.py's) are removed.
-2. Copper pours on F.Cu round the power diodes' non-ground pads (D1, D3, D11 and D13's anode side
-   is GND already): their datasheet ratings assume ~25 mm2 of copper, the bare pads have ~4.
+1. Paste windows round exposed-pad vias (the full board's U2/U3/U5). The lite board has no exposed
+   pad -- the MINI-1's centre GND pads carry their own paste -- so EP is empty and this is a no-op.
+2. Copper pours on F.Cu round the power diodes' pads (D1, D3): their datasheet ratings assume
+   ~25 mm2 of copper, the bare pads have ~4.
 
     python3 dfm_post.py
 """

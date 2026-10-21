@@ -2,13 +2,13 @@
 # SPDX-License-Identifier: MIT
 """Hand-finish one unrouted connection on the bottom layer with a grid A* search.
 
-Freerouting left IO7 (U1 pad 7 -> R7 pad 1) unrouted on revision 10: the top layer on the left of the
-board is congested. This drops a via beside each pad (short top-layer stub), searches a 0.1 mm grid on
+When Freerouting leaves one connection unrouted (the full board's revision 10 did; the lite board's
+attempt 4 left the USB-C VBUS pair, now pre-routed in route.py), this drops a via beside each pad (short top-layer stub), searches a 0.1 mm grid on
 B.Cu that keeps the 0.2 mm clearance to every existing track/pad/via/hole, lays the path, refills the
 ground zones and saves. KiCad DRC is the check afterwards.
 
-    python3 finish_net.py U1 7 R7 1            # replaces any existing copper on the net
-    python3 finish_net.py TP3 1 R7 1 --keep    # branches off the net's existing copper
+    python3 finish_net.py U1 10 R24 1          # replaces any existing copper on the net
+    python3 finish_net.py C13 1 R4 2 --keep    # branches off the net's existing copper
 """
 import heapq
 import math

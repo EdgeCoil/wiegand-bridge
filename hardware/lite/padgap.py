@@ -33,3 +33,4 @@ for i, a in enumerate(pads):
             n += 1
             print(f"  {a[0]}.{a[1]} [{a[2]}] -- {b[0]}.{b[1]} [{b[2]}]: {d:.2f} mm  (need {CLR})")
 print(n, "pad pairs under", CLR, "mm")
+sys.exit(1 if n else 0)

@@ -7,25 +7,31 @@ board's checks had accumulated across several ad-hoc scripts):
  2. audit.py: body clashes, track widths, screw keep-outs, antenna box, silkscreen legibility.
  3. padgap.py: pads of different nets closer than 0.25 mm.
  4. Part spacing: the closest solder joints between neighbouring parts, and the courtyard-overlap
-    pairs with their joint gaps (accepted when >= 0.4 mm).
+    pairs with their joint gaps (accepted when >= 0.25 mm).
  5. Silkscreen: text count, sizes and strokes (JLCPCB minimum 1.0 mm / 0.15 mm).
- 6. Firmware <-> netlist: every GPIO in the YAML lands on the intended net; each reader line
-    traces terminal pin -> series R -> clamp node -> buffer -> GPIO with its drive FET and surge part.
+ 6. Firmware <-> netlist: every GPIO in the YAML (and its packages) lands on the intended net, and
+    every GPIO the netlist wires is claimed by the YAML; each reader line traces terminal pin ->
+    series R -> clamp node -> buffer -> GPIO with its drive FET and surge part.
  7. Diode / LED polarity from each part's EasyEDA symbol.
- 8. IC / module / connector pads with no net.
- 9. BOM vs CPL designators; gerber zip contents; gerber, drill and CPL in one frame.
-10. JLCPCB library: every part number found, class (Basic / Preferred / Extended), stock (network).
+ 8. IC / module / connector pads with no net (the module's open pads must be exactly the planned set).
+ 9. BOM vs CPL designators; gerber zip contents; gerber, drill and CPL in one frame (both axes).
+10. gndcheck.py: every GND pad on the plane; orphan pour islands reported.
+11. The antenna keep-out rule area exists and the strip under it holds no copper on any layer.
+12. JLCPCB library: every part number found, class (Basic / Preferred / Extended), stock; the
+    fee-bearing set must match FEE_BEARING, so the guide's cost table stays true (network).
 
     python3 verify.py            # all
-    python3 verify.py --offline  # skip 10
+    python3 verify.py --offline  # skip 12
 """
 import collections
 import csv
+import glob
 import json
 import os
 import re
 import subprocess
 import sys
+import tempfile
 import zipfile
 
 import pcbnew
@@ -33,14 +39,24 @@ import pcbnew
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 from netlist import PARTS  # noqa: E402
+from placement import BOARD  # noqa: E402
 
 T = pcbnew.ToMM
 PCB = os.path.join(HERE, "wiegand-bridge-lite.kicad_pcb")
 YAML = os.path.join(HERE, "..", "..", "firmware", "wiegand-bridge-lite.yaml")
 FAB = os.path.join(HERE, "fab")
+# Every module GPIO the netlist wires, and the net it must be on. The YAML must claim each one
+# (the firmware is the only thing that sets a pin's boot-time state), and must name no other.
 EXPECT_GPIO = {4: "WG_D0", 5: "WG_D1", 6: "D0_TX", 7: "D1_TX", 8: "LED_TX", 9: "BEEP_TX", 10: "LED_RX",
-               11: "BEEP_RX", 19: "USB_DN", 20: "USB_DP", 21: "IO21", 47: "IO47", 38: "RS485_DE",
-               43: "RS485_DI", 44: "RS485_RO", 0: "IO0"}
+               11: "BEEP_RX", 21: "IO21", 47: "IO47", 38: "RS485_DE", 43: "RS485_DI", 44: "RS485_RO"}
+IMPLICIT_GPIO = {19: "USB_DN", 20: "USB_DP", 0: "IO0"}       # used by the USB-JTAG console and the ROM, not named in YAML
+# Module pads that are meant to be open (every other U1 pad must carry a net): IO1/IO2 (5, 6), IO3 (7),
+# IO12-IO18 (16-22), IO26 (26, PSRAM), IO33-IO37 and IO48 (28-33), IO39-IO42 (35-38), IO45 (41),
+# IO46 (44). Pads 42/43 are GND on the module, so they are wired.
+U1_OPEN = {"5", "6", "7", "16", "17", "18", "19", "20", "21", "22", "26", "28", "29", "30", "31", "32", "33",
+           "35", "36", "37", "38", "41", "44"}
+# JLCPCB part numbers that pay the US$3 loading fee (Extended and not Preferred), as costed in the guide.
+FEE_BEARING = {"C3013941", "C780769", "C10429", "C2765186", "C305174", "C516067", "C441177"}
 ACCEPTED_DRC = {"hole_clearance", "courtyards_overlap", "silk_edge_clearance", "silk_over_copper", "silk_overlap"}
 fails = []
 
@@ -72,9 +88,12 @@ def symbol_pins(lcsc):
 
 # --- 1. DRC ---------------------------------------------------------------------------------------
 section(1, "KiCad DRC")
-out = "/tmp/wiegand-bridge-lite-drc.json"
-subprocess.run(["kicad-cli", "pcb", "drc", "--severity-error", "--severity-warning", "--format", "json", "-o", out, PCB],
-               capture_output=True)
+tmp = tempfile.mkdtemp(prefix="wbl-verify-")
+out = os.path.join(tmp, "drc.json")
+r = subprocess.run(["kicad-cli", "pcb", "drc", "--severity-error", "--severity-warning", "--format", "json", "-o", out, PCB],
+                   capture_output=True, text=True)
+if r.returncode or not os.path.exists(out):
+    sys.exit("kicad-cli pcb drc failed:\n" + r.stdout + r.stderr)
 drc = json.load(open(out))
 kinds = collections.Counter(v["type"] for v in drc["violations"])
 unconn = drc.get("unconnected_items", [])
@@ -165,19 +184,30 @@ if min(sizes) < 1.0 or min(strokes) < 0.15:
 
 # --- 6. firmware <-> netlist ----------------------------------------------------------------------
 section(6, "firmware GPIOs -> netlist nets -> terminal pins")
-pad2io = symbol_pins("C3013941")
+pad2io = symbol_pins(byref["U1"][3])
 io2net = {}
 for pad, net in byref["U1"][4].items():
     io = pad2io.get(pad, pad).replace("TXD0", "IO43").replace("RXD0", "IO44")
     if io.startswith("IO") or io == "EN":
         io2net[io] = net
-used = sorted(set(int(g) for g in re.findall(r"GPIO(\d+)", open(YAML).read())))
+ytext = open(YAML).read()
+for inc in re.findall(r"!include\s+(\S+\.yaml)", ytext):        # packages, whether or not commented out
+    ytext += open(os.path.join(os.path.dirname(YAML), inc)).read()
+used = sorted(set(int(g) for g in re.findall(r"GPIO(\d+)", ytext)))
 for g in used:
     net = io2net.get(f"IO{g}")
-    ok = net == EXPECT_GPIO.get(g)
+    ok = g in EXPECT_GPIO and net == EXPECT_GPIO[g]
     print(f"   GPIO{g:<3} {net!s:10} {'OK' if ok else 'MISMATCH'}")
     if not ok:
-        fail(f"GPIO{g} is on {net}, expected {EXPECT_GPIO.get(g)}")
+        fail(f"GPIO{g} is on {net!s}, expected {EXPECT_GPIO.get(g, 'nothing: the YAML names a GPIO the board does not wire')}")
+unclaimed = sorted(set(EXPECT_GPIO) - set(used))
+if unclaimed:
+    fail(f"netlist wires GPIO{unclaimed} but the YAML never claims them (boot-time state undefined)")
+wired = {int(k[2:]) for k in io2net if k.startswith("IO")}
+unexpected = sorted(wired - set(EXPECT_GPIO) - set(IMPLICIT_GPIO))
+if unexpected:
+    fail(f"netlist wires GPIO{unexpected}, not in EXPECT_GPIO or IMPLICIT_GPIO")
+print(f"   {len(used)} GPIOs named by the YAML; {len(wired)} wired by the netlist ({sorted(IMPLICIT_GPIO)} implicit)")
 for pin in ("3", "4", "5", "6"):
     raw = byref["J3"][4][pin]
     try:
@@ -223,6 +253,10 @@ for f in board.GetFootprints():
         print(f"   {ref}: {nc or 'all assigned'}")
         if ref in ("U2", "U4", "U9", "U11", "J3") and nc:
             fail(f"{ref} has unassigned pads {nc}")
+        if ref == "U1" and set(nc) != U1_OPEN:
+            fail(f"U1 open pads differ from the plan: extra {sorted(set(nc) - U1_OPEN)}, missing {sorted(U1_OPEN - set(nc))}")
+        if ref == "J1" and set(nc) != {"", "A8", "B8"}:        # "" = the two unnamed NPTH locating pegs
+            fail(f"J1 open pads {nc}, expected only the SBU pair A8/B8 and the unnamed pegs")
 
 # --- 9. fab outputs -------------------------------------------------------------------------------
 section(9, "BOM vs CPL, gerber zip, coordinate frame")
@@ -250,19 +284,69 @@ xs = [int(v) / 1e6 for v in re.findall(r"X(-?\d+)", edge)]
 ys = [int(v) / 1e6 for v in re.findall(r"Y(-?\d+)", edge)]
 drl = z.read([f for f in names if "PTH.drl" in f and "NPTH" not in f][0]).decode()
 hx = [float(v) for v in re.findall(r"X(-?[\d.]+)Y", drl)]
+hy = [float(v) for v in re.findall(r"Y(-?[\d.]+)", drl)]
 cx = [float(r["Mid X"][:-2]) for r in cpl]
-print(f"   edge gerber x {min(xs):.2f}..{max(xs):.2f} y {min(ys):.2f}..{max(ys):.2f}; drills x {min(hx):.2f}..{max(hx):.2f}; CPL x {min(cx):.2f}..{max(cx):.2f} (one frame, origin bottom-left)")
-if not (abs(min(xs)) < 0.01 and abs(max(xs) - 42) < 0.01 and 0 < min(hx) and max(hx) < 42 and 0 < min(cx) and max(cx) < 42):
+cy_ = [float(r["Mid Y"][:-2]) for r in cpl]
+W, H = BOARD[2], BOARD[3]
+print(f"   edge gerber x {min(xs):.2f}..{max(xs):.2f} y {min(ys):.2f}..{max(ys):.2f}; drills x {min(hx):.2f}..{max(hx):.2f} y {min(hy):.2f}..{max(hy):.2f}; "
+      f"CPL x {min(cx):.2f}..{max(cx):.2f} y {min(cy_):.2f}..{max(cy_):.2f} (one frame {W} x {H}, origin bottom-left)")
+if not (abs(min(xs)) < 0.01 and abs(max(xs) - W) < 0.01 and abs(min(ys)) < 0.01 and abs(max(ys) - H) < 0.01
+        and 0 < min(hx) and max(hx) < W and 0 < min(hy) and max(hy) < H
+        and 0 < min(cx) and max(cx) < W and -1 < min(cy_) and max(cy_) < H + 5):     # U1 and J3 overhang the edges
     fail("gerber / drill / CPL frames disagree")
 
-# --- 10. JLCPCB library ---------------------------------------------------------------------------
+# --- 10. ground plane -----------------------------------------------------------------------------
+section(10, "gndcheck.py: GND pads on the plane, orphan pour islands")
+r = subprocess.run([sys.executable, os.path.join(HERE, "gndcheck.py")], capture_output=True, text=True, cwd=HERE)
+for ln in r.stdout.splitlines()[-6:]:
+    print("  ", ln)
+if r.returncode:
+    fail("gndcheck: a GND pad is not on the plane")
+m = re.search(r"orphan components: (\d+)", r.stdout)
+orphans = int(m.group(1)) if m else -1
+if orphans < 0:
+    fail("gndcheck produced no summary")
+held = re.findall(r"orphan .* pads \[([^\]]+)\]", r.stdout)
+if held:
+    fail(f"orphan pour islands hold pads: {held}")
+
+# --- 11. antenna keep-out -------------------------------------------------------------------------
+section(11, "antenna keep-out: rule area present, no copper under the antenna strip")
+rules = [z for z in board.Zones() if z.GetIsRuleArea() and z.GetZoneName() == "antenna_keepout"]
+if len(rules) != 1:
+    fail(f"{len(rules)} antenna_keepout rule areas (want 1)")
+else:
+    rb = rules[0].GetBoundingBox()
+    x1, x2, yb = T(rb.GetLeft()), T(rb.GetRight()), T(rb.GetBottom())
+    print(f"   rule area x {x1:.1f}..{x2:.1f}, down to y {yb:.2f} (board top {BOARD[1]}), layers {len(rules[0].GetLayerSet().Seq())}")
+    if len(rules[0].GetLayerSet().Seq()) != board.GetCopperLayerCount():
+        fail("antenna keep-out is not on every copper layer")
+    probes = [pcbnew.VECTOR2I(pcbnew.FromMM(x), pcbnew.FromMM(y)) for x in (x1 + 0.5, (x1 + x2) / 2, x2 - 0.5)
+              for y in (BOARD[1] + 0.2, yb - 0.1)]
+    copper = []
+    for z in board.Zones():
+        if z.GetIsRuleArea():
+            continue
+        for L in z.GetLayerSet().Seq():
+            poly = z.GetFilledPolysList(L)
+            if any(poly.Collide(p, 0) for p in probes):
+                copper.append((z.GetNetname(), board.GetLayerName(L)))
+    for t in board.GetTracks():
+        if t.HitTest(pcbnew.BOX2I(pcbnew.VECTOR2I(rb.GetLeft(), pcbnew.FromMM(BOARD[1])), pcbnew.VECTOR2L(rb.GetWidth(), pcbnew.FromMM(yb - BOARD[1]))), False, 0):
+            copper.append((t.GetNetname(), "track/via"))
+    print(f"   copper in the strip: {copper or 'none'}")
+    if copper:
+        fail(f"copper under the antenna strip: {copper}")
+
+# --- 12. JLCPCB library ---------------------------------------------------------------------------
 if "--offline" not in sys.argv:
-    section(10, "JLCPCB library: class and stock for every part number")
+    section(12, "JLCPCB library: class and stock for every part number")
     codes = collections.defaultdict(list)
     for ref, fp, val, lcsc, pads in PARTS:
         if lcsc:
             codes[lcsc].append(ref)
     fee = 0
+    fee_set = set()
     for code, rs in sorted(codes.items()):
         body = json.dumps({"keyword": code, "currentPage": 1, "pageSize": 3, "searchSource": "search", "componentLibraryType": ""})
         try:
@@ -275,12 +359,16 @@ if "--offline" not in sys.argv:
             continue
         cls = "Basic" if x.get("componentLibraryType") == "base" else ("Preferred" if x.get("preferredComponentFlag") else "Extended")
         fee += cls == "Extended"
+        if cls == "Extended":
+            fee_set.add(code)
         stock = x.get("stockCount") or 0
         flag = "" if stock >= 100 else "   <-- LOW STOCK"
         print(f"   {code:12} {','.join(rs):24} {cls:9} stock {stock:<8} {x.get('componentModelEn', '')[:30]}{flag}")
         if stock < 20:
             fail(f"{code} stock {stock}")
-    print(f"   fee-bearing Extended types: {fee}")
+    print(f"   fee-bearing Extended types: {fee} {sorted(fee_set)}")
+    if fee_set != FEE_BEARING:
+        fail(f"fee-bearing set changed: now +{sorted(fee_set - FEE_BEARING)} -{sorted(FEE_BEARING - fee_set)}; update the guide's cost table and FEE_BEARING")
 
 print("\n" + ("ALL CHECKS PASSED" if not fails else f"{len(fails)} FAILURE(S):\n   " + "\n   ".join(fails)))
 sys.exit(1 if fails else 0)

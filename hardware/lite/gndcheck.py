@@ -64,8 +64,20 @@ def analyse(b):
                 union(key, k2)
         for k2, p in pads:
             ls = layers_of(p)
-            if (ls is None or L in ls) and poly.PointInside(p.GetPosition()):
+            if ls is not None and L not in ls:
+                continue
+            if poly.PointInside(p.GetPosition()):
                 union(key, k2)
+            elif p.GetDrillSize().x > 0:
+                # A through-hole pad joined by thermal spokes only: the fill has a clearance hole round
+                # the pad, so its centre is outside the polygon. Sample a ring just outside the annulus;
+                # a spoke puts fill there. (J3.2 read as "off the plane" until this, 2026-10-21.)
+                import math
+                r = max(p.GetSize().x, p.GetSize().y) / 2 + pcbnew.FromMM(0.05)
+                c = p.GetPosition()
+                if any(poly.PointInside(pcbnew.VECTOR2I(int(c.x + r * math.cos(a)), int(c.y + r * math.sin(a))))
+                       for a in [k * math.pi / 8 for k in range(16)]):
+                    union(key, k2)
     for k1, t in items:                       # track/via/pad endpoint contacts
         pts = [t.GetPosition()] if t.GetClass() == "PCB_VIA" else [t.GetStart(), t.GetEnd()]
         for k2, p in pads:
@@ -92,4 +104,11 @@ def analyse(b):
 
 
 if __name__ == "__main__":
-    analyse(pcbnew.LoadBoard("wiegand-bridge-lite.kicad_pcb"))
+    import os
+    import sys
+    b = pcbnew.LoadBoard(os.path.join(os.path.dirname(os.path.abspath(__file__)), "wiegand-bridge-lite.kicad_pcb"))
+    _, on_plane = analyse(b)
+    gnd = [p for f in b.GetFootprints() for p in f.Pads() if p.GetNetname() == "GND"]
+    off = len(gnd) - len(on_plane)
+    print("GND pads:", len(gnd), "on the plane:", len(on_plane), "off:", off)
+    sys.exit(1 if off else 0)

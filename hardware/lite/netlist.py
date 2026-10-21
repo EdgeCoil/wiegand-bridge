@@ -38,7 +38,7 @@ WB = "wb"  # ../lib/wb.pretty (symlinked as lib/), from easyeda2kicad
 
 # Footprints: (library, name)
 FP = {
-    "esp32mini": (WB, "BULETM-SMD_ESP32-S3-MINI-1-N8"),
+    "esp32mini": (WB, "BULETM-SMD_ESP32-S3-MINI-1-N8"),   # EasyEDA names the N8 footprint; every MINI-1 variant shares the land pattern
     "tsot26": (WB, "TSOT-26_L2.9-W1.6-P0.95-LS2.8-BL"),
     "sot6bl": (WB, "SOT-23-6_L2.9-W1.6-P0.95-LS2.8-BL"),
     "sot23_2n7002": (WB, "SOT-23-3_L2.9-W1.3-P1.90-LS2.4-BR"),
@@ -115,7 +115,8 @@ part("D3", "sma_ss34", "SS34", "C8678", {"1": "+VIN", "2": "VBUS"})   # 4.6 V in
 # --- Block 4: MCU, buttons, status LEDs -------------------------------------------------------------
 # ESP32-S3-MINI-1 pad -> GPIO from its symbol: 4 IO0, 8-15 IO4-IO11, 23 IO19, 24 IO20, 25 IO21,
 # 27 IO47, 34 IO38, 39 TXD0 (IO43), 40 RXD0 (IO44), 45 EN. 7 IO3, 41 IO45, 44 IO46 strapping and
-# 26 IO26 (PSRAM on N4R2): no connect. 42, 43, 46-60 and the nine centre pads are GND.
+# 26 IO26 (PSRAM on N4R2): no connect. 42, 43, 46-60 and the 13 pads the footprint names "GND"
+# (nine centre + four corners = module pins 61-65) are GND.
 part("U1", "esp32mini", "ESP32-S3-MINI-1-N4R2", "C3013941", {
     "1": "GND", "2": "GND", "3": "+3V3", "4": "IO0",
     "8": "WG_D0", "9": "WG_D1",             # IO4 / IO5: buffered D0 / D1 (as rev 10)
