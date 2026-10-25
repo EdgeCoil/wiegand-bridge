@@ -30,12 +30,17 @@ alerting on the tamper switch.
           └──── beep + LED feedback ◀──────┴──── "granted" / "denied" ┘
 ```
 
-1. Someone enters a PIN (ending in `#`) or presents a card.
+1. Someone enters a PIN (4–10 digits, then `#`) or presents a card.
 2. The board sends a Home Assistant event, `esphome.wiegand_bridge`, with `type` set to `code` or
    `fob` and the PIN or card number in `value`.
 3. Your automation checks it and does whatever you want.
-4. It calls `feedback_granted` or `feedback_denied` on the board, which flashes and beeps the reader
-   and shows the result on the screen.
+4. It calls `feedback_granted` or `feedback_denied` on the board. *Granted* pulses the reader's LED
+   three times and then holds it for 3 s; *denied* beeps three times. Both show on the screen, if fitted.
+
+The keypad also works as a **doorbell**: pressing `#` with nothing typed fires the board's
+`doorbell` event entity. While someone types, the board's `entry` sensor shows one `*` per digit
+(never the digits). `*` clears an entry, and an entry too short to submit is cleared rather than
+joined to the next one.
 
 A minimal automation:
 
@@ -63,7 +68,8 @@ actions:
    the bench.
 4. **Flash the firmware** over USB-C with ESPHome: [`firmware/wiegand-bridge.yaml`](firmware/wiegand-bridge.yaml).
    It needs four entries in your `secrets.yaml`: `wifi_ssid`, `wifi_password`,
-   `wiegand_bridge_api_key` and `wiegand_bridge_ota_password`.
+   `wiegand_bridge_api_key` and `wiegand_bridge_ota_password`. If you've fitted the OLED, uncomment
+   the `packages:` block at the end so it includes [`wiegand-bridge-oled.yaml`](firmware/wiegand-bridge-oled.yaml).
 5. **Adopt it in Home Assistant** (ESPHome integration) and write your automation.
 
 For the first power-up, follow the staged bench tests at the end of [`docs/design.md`](docs/design.md).
@@ -104,13 +110,15 @@ can also pretend to be a reader towards an existing access controller.
 **Designed, routed and checked, but no board made yet.** See [`docs/lite.md`](docs/lite.md),
 [`hardware/lite/`](hardware/lite/) and [`firmware/wiegand-bridge-lite.yaml`](firmware/wiegand-bridge-lite.yaml).
 
-![Size comparison](hardware/lite/fab/size-comparison.png)
+| LITE | Next to the full board |
+|---|---|
+| ![LITE board](hardware/lite/fab/render-perspective.png) | ![Size comparison](hardware/lite/fab/size-comparison.png) |
 
 ## What's in this repository
 
 | Path | What it is |
 |---|---|
-| [`firmware/`](firmware/) | ESPHome configurations: the full board, the LITE, and a bench-only LITE emulation package |
+| [`firmware/`](firmware/) | ESPHome configurations: the full board and its optional OLED package, the LITE, and a bench-only LITE emulation package |
 | [`docs/design.md`](docs/design.md) | How it works, pin map, connectors, security notes and bench tests |
 | [`docs/breadboard.md`](docs/breadboard.md) | A through-hole breadboard version, for trying your reader before ordering |
 | [`docs/lite.md`](docs/lite.md) | The LITE board in detail |

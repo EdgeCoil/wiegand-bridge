@@ -180,6 +180,9 @@ A **1.3" 128×64 SH1106, 4-pin I²C** module, address `0x3C`. **Check its pin or
 in.** J5 is `GND VCC SCL SDA`, but many modules are `VCC GND SCL SDA`, which would reverse the
 supply. Some modules have 0 Ω links on the back to swap the first two pins; otherwise use a short
 lead with wires 1 and 2 crossed. The firmware blanks the screen after 60 s and wakes it on a key press.
+The screen is an optional ESPHome package: uncomment the `packages:` block at the end of
+`firmware/wiegand-bridge.yaml` once it is fitted. Without a screen, leave it out, or the missing
+display shows as a fault on the status LED.
 
 ## Layout
 

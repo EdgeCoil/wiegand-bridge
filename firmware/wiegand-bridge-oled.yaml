@@ -1,0 +1,25 @@
+# SPDX-FileCopyrightText: 2026 edgecoil
+# SPDX-License-Identifier: MIT
+# The 1.3" SH1106 OLED on J5 (GND VCC SCL SDA), as a package of wiegand-bridge.yaml.
+# Include it only when the screen is fitted: without one, ssd1306_i2c marks itself FAILED and the
+# status LED blinks as an error. The 60 s wake timing lives in wiegand-bridge.yaml (screen_wake).
+#
+# NEVER draw a PIN, a card number or anyone's name: the screen faces the public side of the door.
+
+font:
+  - file: "gfonts://Roboto"
+    id: font_status
+    size: 14
+
+display:
+  - platform: ssd1306_i2c
+    id: oled
+    i2c_id: bus_a
+    model: "SH1106 128x64"
+    address: 0x3C
+    update_interval: 500ms
+    # Asleep = an all-black frame. An OLED pixel that is off emits nothing, so this is dark without
+    # the main config needing id(oled) -- which would not exist on a board with no screen.
+    lambda: |-
+      if (!id(screen_awake)) return;
+      it.print(64, 32, id(font_status), TextAlign::CENTER, id(screen_text).c_str());

@@ -2,10 +2,8 @@
 # SPDX-License-Identifier: MIT
 # edgecoil wiegand-bridge -- ESPHome config for the revision 10 board (hardware/).
 #
-# The rev 10 board is built and tested; work through docs/design.md *Bench tests* before relying on
-# a new one. This is the reference configuration for its pin map. The tested installation runs a
-# derivative of it that adds a doorbell event on '#', a masked entry display and a pulsed "granted"
-# pattern; those additions are not in this file yet.
+# Tested on the rev 10 board. Work through docs/design.md *Bench tests* before relying on a new one.
+# The OLED is an optional package (wiegand-bridge-oled.yaml): include it once a screen is fitted.
 #
 # THIS DEVICE ONLY REPORTS. There is no relay output defined: credentials go to Home Assistant as
 # events, HA decides, and any unlock happens elsewhere, through whatever actuator HA already controls.
@@ -43,16 +41,30 @@ api:
   actions:
     - action: feedback_granted
       then:
+        - logger.log:            # INFO, so a caller can confirm the action ran (no credential in it)
+            level: INFO
+            format: "feedback: granted"
         - lambda: 'id(screen_text) = "Granted";'
         - script.execute: screen_wake
-        - output.turn_on: reader_led
+        # Three green pulses, then green held 3 s. On most readers the LED line is a level input:
+        # pulled low = green. Not every reader wires BEEP; it is kept for those that do.
         - output.turn_on: reader_beep
-        - delay: 150ms
-        - output.turn_off: reader_beep
-        - delay: 2s
+        - repeat:
+            count: 3
+            then:
+              - output.turn_on: reader_led
+              - delay: 300ms
+              - output.turn_off: reader_led
+              - delay: 200ms
+              - output.turn_off: reader_beep
+        - output.turn_on: reader_led
+        - delay: 3s
         - output.turn_off: reader_led
     - action: feedback_denied
       then:
+        - logger.log:
+            level: INFO
+            format: "feedback: denied"
         - lambda: 'id(screen_text) = "Denied";'
         - script.execute: screen_wake
         - repeat:
@@ -78,7 +90,7 @@ i2c:
     scl: GPIO42
 
 # rev 10: TCA9535 at 0x20 (register-compatible with PCA9555 -> the pca9554 component, 16 pins).
-# P00 relay drive (relay not fitted by default; deliberately NOT defined here), P01 CHRG,
+# P00 relay drive (spare boards only -- deliberately NOT defined on the door unit), P01 CHRG,
 # P02 DONE, P03 external power, P04 5 V power-good, P05 W5500 reset, P06-P17 to the 2x6 header.
 pca9554:
   - id: io_exp
@@ -98,9 +110,30 @@ wiegand:
   - id: reader
     d0: GPIO4                    # via U4 74LVC2G17
     d1: GPIO5
-    on_key:                      # keys reach pin_input through its source_id; this only wakes the screen
+    on_key:                      # keys reach pin_input through its source_id, AFTER this trigger runs
       then:
         - script.execute: screen_wake
+        # On many keypads the bell key IS '#' (11). '#' with no digits typed rings the doorbell;
+        # '#' after 1-3 digits clears the entry, because key_collector keeps a too-short entry
+        # (so "12#3456#" would otherwise submit 123456). 4+ digits: key_collector submits it.
+        - lambda: |-
+            const uint32_t now = millis();
+            if (now - id(last_key_ms) > 10000) id(digits_typed) = 0;   // mirrors pin_input's timeout
+            id(last_key_ms) = now;
+            if (x <= 9) {
+              id(digits_typed)++;
+            } else if (x == 10) {                                      // '*'
+              id(digits_typed) = 0;
+            } else if (x == 11) {                                      // '#'
+              if (id(digits_typed) >= 4) {
+                id(last_submit_ms) = now;
+              } else if (id(digits_typed) > 0) {
+                id(pin_input).clear();
+              } else if (now - id(last_submit_ms) > 2000) {            // a habitual second '#' is not a ring
+                id(doorbell).trigger("ring");
+              }
+              id(digits_typed) = 0;
+            }
     on_tag:
       then:
         - script.execute: screen_wake
@@ -119,6 +152,13 @@ key_collector:
     end_key_required: true
     clear_keys: "*"
     timeout: 10s
+    # Masked live entry: one '*' per digit typed, empty on clear/timeout/submit. NEVER the digits --
+    # this is an entity, so once adopted it lands in HA's history.
+    on_progress:
+      then:
+        - text_sensor.template.publish:
+            id: entry_progress
+            state: !lambda "return std::string(x.size(), '*');"
     on_result:
       then:
         - homeassistant.event:
@@ -144,6 +184,8 @@ output:
     pin:
       number: GPIO48
       inverted: true             # R18 holds IO48 high = reader on; turn_on drives it low = shed
+
+
 
 light:
   - platform: status_led
@@ -268,28 +310,43 @@ globals:
   - id: screen_text
     type: std::string
     initial_value: '"Present card or enter code"'
+  - id: screen_awake              # read by wiegand-bridge-oled.yaml; harmless with no screen
+    type: bool
+    initial_value: 'false'
+  - id: digits_typed              # doorbell / short-entry logic in the wiegand on_key
+    type: int
+    initial_value: '0'
+  - id: last_key_ms
+    type: uint32_t
+    initial_value: '0'
+  - id: last_submit_ms
+    type: uint32_t
+    initial_value: '0'
 
-font:
-  - file: "gfonts://Roboto"
-    id: font_status
-    size: 14
+text_sensor:
+  - platform: template
+    id: entry_progress
+    name: "${friendly_name} entry"
+    icon: mdi:dialpad
 
-display:
-  - platform: ssd1306_i2c
-    id: oled
-    i2c_id: bus_a
-    model: "SH1106 128x64"
-    address: 0x3C
-    update_interval: 500ms
-    lambda: |-
-      it.print(64, 32, id(font_status), TextAlign::CENTER, id(screen_text).c_str());
+event:
+  - platform: template
+    id: doorbell
+    name: "${friendly_name} doorbell"
+    device_class: doorbell
+    event_types: [ring]
+
+# The OLED lives in its own package so a board without one has no FAILED component (which
+# blinks the status LED as an error). Uncomment once the SH1106 is on J5.
+# packages:
+#   oled: !include wiegand-bridge-oled.yaml
 
 script:
   - id: screen_wake
     mode: restart
     then:
-      - lambda: id(oled).turn_on();
+      - lambda: id(screen_awake) = true;
       - delay: 60s
       - lambda: |-
           id(screen_text) = "Present card or enter code";
-          id(oled).turn_off();
+          id(screen_awake) = false;
