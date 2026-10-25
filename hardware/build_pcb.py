@@ -42,6 +42,29 @@ def text(board, s, x, y, size=0.8, rot=0, layer=pcbnew.F_SilkS):
     if layer == pcbnew.B_SilkS:
         t.SetMirrored(True)
     board.Add(t)
+    return t
+
+
+def text_from(board, s, x, edge, side, size=0.8, rot=90, layer=pcbnew.F_SilkS):
+    """A label whose top (side="top") or bottom (side="bottom") edge sits at y = `edge` -- for pin
+    legends that must start just clear of a header, whatever the length of the word (rev 11)."""
+    t = text(board, s, x, edge, size, rot, layer)
+    bb = t.GetBoundingBox()
+    dy = mm(edge) - (bb.GetTop() if side == "top" else bb.GetBottom())
+    t.Move(pcbnew.VECTOR2I(0, dy))
+    return t
+
+
+def silk_bottom(board, ref):
+    fp = board.FindFootprintByReference(ref)
+    return max(pcbnew.ToMM(g.GetBoundingBox().GetBottom()) for g in fp.GraphicalItems()
+               if g.GetClass() == "PCB_SHAPE" and g.GetLayer() == pcbnew.F_SilkS)
+
+
+def silk_top(board, ref):
+    fp = board.FindFootprintByReference(ref)
+    return min(pcbnew.ToMM(g.GetBoundingBox().GetTop()) for g in fp.GraphicalItems()
+               if g.GetClass() == "PCB_SHAPE" and g.GetLayer() == pcbnew.F_SilkS)
 
 
 def pad_xy(board, ref, num):
@@ -61,7 +84,7 @@ TERMINAL_LABELS = {
 def logo(board, cx, cy, width, layer=pcbnew.B_SilkS, src="edgecoil-mark.geojson"):
     """The edgecoil mark from art/edgecoil-mark.geojson (potrace of brand/edgecoil/v2's one-colour
     full cut): one polygon per feature, each an outline + holes, scaled to `width` mm, centred at
-    (cx, cy), mirrored on the back so it reads correctly."""
+    (cx, cy), mirrored on the back so it reads correctly. (art/logo.geojson is the original mark.)"""
     import json
     feats = [f["geometry"]["coordinates"] for f in json.load(open(os.path.join(HERE, "art", src)))["features"]]
     xs = [p[0] for g in feats for p in g[0]]
@@ -93,7 +116,9 @@ def logo(board, cx, cy, width, layer=pcbnew.B_SilkS, src="edgecoil-mark.geojson"
 
 
 def labels(board):
-    """Silkscreen a wiring legend: terminal pins, connector pin orders, buttons, LEDs, title."""
+    """Silkscreen a wiring legend: terminal pins, connector pin orders, buttons, LEDs, title.
+    Rev 11 (2026-10-20: rev 10 labels were blocked or overcrowded): every label is held clear of
+    pads, outlines, fitted parts and other text -- `python3 audit.py --silk` checks it."""
     x0, y0, w, h = BOARD
     for ref, names in TERMINAL_LABELS.items():
         for num, name in zip(("1", "2"), names):
@@ -101,46 +126,51 @@ def labels(board):
             if not name:
                 continue
             if ref in ("J9", "J12", "J13"):      # left edge: label just inboard of the body
-                text(board, name, x0 + 11.6, py, 0.8, 90)
+                text(board, name, x0 + 11.85, py, 0.8, 90)
             elif ref in ("J15", "J16"):          # right edge: on the back -- the top gap between K1 and
                 text(board, name, 180.6, py, 1.0, 0, pcbnew.B_SilkS)    # the blocks is 0.9 mm, under the relay
             else:                                # bottom edge
-                text(board, name, px, y0 + h - 11.6, 0.8)
-    for num, name in zip("1234", ("GND", "3V3", "SCL", "SDA")):
+                text(board, name, px, y0 + h - 12.1, 0.8)
+    for num, name in zip("1234", ("GND", "3V3", "SCL", "SDA")):   # the OLED's pin order: check it first
         px, py = pad_xy(board, "J5", num)
-        text(board, name, px, py + 2.6, 0.8, 90)
-    for ref, names in (("J6", ("3V3", "GND", "SCK", "MOSI", "CS", "DC", "RST", "BL/BSY")),
-                       ("J17", ("3V3", "GND", "SCK", "MOSI", "MISO", "CS", "INT", "RST"))):
-        for num, name in enumerate(names, 1):
-            px, py = pad_xy(board, ref, str(num))
-            text(board, name, px, py + 3.8, 0.8, 90)
-    for ref, name, dy in (("J17", "W5500", -2.6), ("J19", "EXPANSION (see guide)", 2.9)):
-        px, py = pad_xy(board, ref, "1")
-        text(board, name, px + 8, py + dy, 0.8)
+        text_from(board, name, px, silk_bottom(board, "J5") + 0.2, "top")
+    # J6-8 is the TFT backlight or the e-paper BUSY line ("BL/BSY" ran into U8)
+    for num, name in enumerate(("3V3", "GND", "SCK", "MOSI", "CS", "DC", "RST", "BL"), 1):
+        px, py = pad_xy(board, "J6", str(num))
+        text_from(board, name, px, silk_bottom(board, "J6") + 0.25, "top")
+    # J17 (W5500, not fitted) sits under a plugged-in OLED with parts all round it: its pin legend
+    # goes on the back, above the pins, where there is room
+    for num, name in enumerate(("3V3", "GND", "SCK", "MOSI", "MISO", "CS", "INT", "RST"), 1):
+        px, py = pad_xy(board, "J17", str(num))
+        text_from(board, name, px, silk_top(board, "J17") - 0.25, "bottom", layer=pcbnew.B_SilkS)
+    px, py = pad_xy(board, "J17", "8")
+    text_from(board, "W5500", px + 2.9, silk_top(board, "J17") - 0.25, "bottom", layer=pcbnew.B_SilkS)
+    px, py = pad_xy(board, "J19", "1")
+    text(board, "EXPANSION", px + 3.6, silk_bottom(board, "J19") + 1.1, 0.8)
     for num, name in (("1", "+"), ("2", "-"), ("3", "T"), ("4", "T")):   # cell +/-, thermistor T T
         bx, by = pad_xy(board, "J4", num)
-        text(board, name, bx, by + 4.0, 1.0)
+        text(board, name, bx, by + 3.95, 1.0)
         text(board, name, bx, by + 2.2, 1.0, 0, pcbnew.B_SilkS)      # same legend under each pin, back side
     bx, by = pad_xy(board, "J4", "2")                                   # clear of the pins, inside the edge
     text(board, "BATTERY: LiFePO4 3.2V ONLY", 177.5, by + 4.2, 1.0, 0, pcbnew.B_SilkS)
-    text(board, "T T: 10k B3950 NTC", 177.5, by - 2.4, 1.0, 0, pcbnew.B_SilkS)
+    text(board, "T T: 10k NTC", 183.3, by - 2.4, 1.0, 0, pcbnew.B_SilkS)   # rev 11: shortened to clear J17 (B3950)
     tx, ty = pad_xy(board, "J8", "1")
-    text(board, "EXT TAMPER", tx + 3.6, ty + 2.2, 0.8)
-    for ref, name, dy in (("SW1", "BOOT", 3.4), ("SW2", "RESET", 3.4), ("SW3", "TAMPER", 3.4)):
+    text(board, "EXT TAMPER", tx + 3.6, ty + 2.55, 0.8)
+    for ref, name, dy in (("SW1", "BOOT", 3.8), ("SW2", "RESET", 3.8), ("SW3", "TAMPER", 3.8)):
         f = board.FindFootprintByReference(ref).GetPosition()
         text(board, name, pcbnew.ToMM(f.x), pcbnew.ToMM(f.y) + dy, 0.8)
-    for ref, name, dx, dy in (("D7", "PWR", 4.2, 0), ("D8", "STATUS", 0, 2.0), ("D12", "CHG", 0, 1.8),
-                              ("JP1", "13V2", 0, 1.8), ("J1", "USB-C", 0, 6.0), ("JP2", "TERM", 0, -2.6),
-                              ("J18", "QWIIC", 0, 3.4), ("J14", "DC IN", -6.0, -4.5),
-                              ("JP5", "NTC", 0, 1.8)):
+    for ref, name, dx, dy in (("D7", "PWR", 4.2, 0), ("D23", "OK", 3.9, 0), ("D8", "FAULT", 4.9, 0),
+                              ("D12", "CHG", 0, 2.1), ("JP1", "13V2", 0.4, 2.25), ("J1", "USB-C", 0, 6.0),
+                              ("JP2", "TERM", 0.6, 2.6), ("J18", "QWIIC", 0, 3.4), ("J14", "DC IN", -6.0, -4.5),
+                              ("JP5", "NTC", -3.2, 0.3)):
         f = board.FindFootprintByReference(ref).GetPosition()
         text(board, name, pcbnew.ToMM(f.x) + dx, pcbnew.ToMM(f.y) + dy, 0.8)
     f = board.FindFootprintByReference("JP3").GetPosition()   # no room on top: label the bias jumpers underneath
     text(board, "JP3+JP4 = RS485 BIAS", pcbnew.ToMM(f.x) + 1.3, pcbnew.ToMM(f.y) - 3.6, 0.8, 0, pcbnew.B_SilkS)
     lh = logo(board, 158.0, 149.0, 28.0)
     text(board, "WIEGAND BRIDGE  v1.0", 158.0, 149.0 + lh / 2 + 2.0, 1.2, 0, pcbnew.B_SilkS)
-    text(board, "rev 10b  2026-10", 158.0, 149.0 + lh / 2 + 4.0, 0.9, 0, pcbnew.B_SilkS)
-    text(board, "wiegand.edgecoil.dev", 158.0, 149.0 + lh / 2 + 6.2, 1.2, 0, pcbnew.B_SilkS)
+    text(board, "rev 11  2026-10", 158.0, 149.0 + lh / 2 + 4.3, 0.9, 0, pcbnew.B_SilkS)
+    text(board, "wiegand.edgecoil.dev", 158.0, 149.0 + lh / 2 + 6.6, 1.2, 0, pcbnew.B_SilkS)
 
 
 def main():

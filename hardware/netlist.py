@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: 2026 edgecoil
 # SPDX-License-Identifier: CERN-OHL-S-2.0
-"""Wiegand reader bridge, revision 10 -- the netlist, as data.
+"""Wiegand reader bridge, revision 11 -- the netlist, as data.
 
 Source of truth for build_pcb.py. See docs/design.md for the reasoning; pad numbers are
 taken from each part's EasyEDA symbol/footprint (lib/wb.*) or the KiCad stock footprint.
@@ -17,6 +17,9 @@ Changes from the guide's text, made while assigning real parts (2026-10-11):
   ext power, 5 V power-good, relay drive, W5500 reset, spares), RS-485 port (SP3485), SM712 surge
   protection on every field wire, reader current sense (0.2 ohm + LMV321), W5500 / Qwiic /
   expansion headers, J5 OLED socket fitted by JLCPCB.
+- Revision 11 (2026-10-20): a red + green status pair. D8 becomes red (IO21, ESPHome's
+  status LED: blinks on warning/error); D23 green on IO47 (firmware: healthy/connected). IO47 was
+  DISP_RST to J6 (TFT/EPD, never fitted): DISP_RST moves to expander P06, so J19-3 now shares it.
 - SW1-SW3 use pads 1 and 4 only: diagonal pads are always across the switch, whichever way the
   part pairs its pins internally.
 """
@@ -158,7 +161,8 @@ part("U1", "esp32", "ESP32-S3-WROOM-1-N8R2", "C2913204", {
     "1": "GND", "2": "+3V3", "3": "EN", "4": "WG_D0", "5": "WG_D1", "6": "IO6",   # 7 (IO7) unused since rev 10
     "8": "IN1", "9": "IN2", "10": "IN3", "11": "IN4", "12": "TAMPER", "13": "USB_DN", "14": "USB_DP", "15": "TEMP_ADC",
     "17": "RDR_ISENSE", "18": "SPI_CS", "19": "SPI_MOSI", "20": "SPI_SCK", "21": "SPI_DC",
-    "22": "SPI_BL_BUSY", "23": "IO21", "24": "DISP_RST", "25": "IO48", "27": "IO0",
+    "22": "SPI_BL_BUSY", "23": "IO21", "24": "IO47",   # IO47 = green status LED since rev 11
+    "25": "IO48", "27": "IO0",
     "28": "ETH_MISO", "29": "ETH_CS", "30": "ETH_INT", "31": "RS485_DE", "32": "EXP_INT", "33": "IO40",   # IO40 = reader BEEP since rev 10 (IO7 could not be routed out)
     "34": "I2C_SDA", "35": "I2C_SCL", "36": "RS485_RO", "37": "RS485_DI", "38": "RDR_MON",
     "39": "BAT_SENSE", "40": "GND", "41": "GND"})
@@ -171,7 +175,9 @@ part("SW2", "tact", "RESET", "C318884", {"1": "EN", "4": "GND"})
 res("R5", "10k", "+3V3", "IO0")
 part("SW1", "tact", "BOOT", "C318884", {"1": "IO0", "4": "GND"})
 res("R8", "1k", "IO21", "D8_K")
-part("D8", "led_r", "yellow", "C2296", {"1": "+3V3", "2": "D8_K"})  # C2296: 1 = +
+part("D8", "led", "red", "C84256", {"1": "D8_K", "2": "+3V3"})  # rev 11: red (was yellow C2296); C84256: 1 = -
+res("R81", "1k", "IO47", "D23_K")
+part("D23", "led_r", "green", "C2297", {"1": "+3V3", "2": "D23_K"})  # rev 11: green status; C2297: 1 = A
 for i, n in enumerate(["RS485_DI", "RS485_RO", "IO40", "GND"], 1):   # TX/RX are UART0 = RS-485 now
     part(f"TP{i}", "tp", n, None, {"1": n})
 
@@ -286,14 +292,16 @@ part("U8", "tssop24", "TCA9535", "C130204", {
     "1": "EXP_INT", "2": "GND", "3": "GND", "21": "GND", "12": "GND", "24": "+3V3",
     "22": "I2C_SCL", "23": "I2C_SDA",
     "4": "RELAY_DRV", "5": "CHRG", "6": "DONE_N", "7": "EXT_SENSE", "8": "PGOOD5", "9": "ETH_RST",
-    "10": "EXP06", "11": "EXP07", "13": "EXP10", "14": "EXP11", "15": "EXP12", "16": "EXP13",
+    "10": "DISP_RST",   # rev 11: P06 = TFT/EPD reset (IO47 is the green LED)
+     "11": "EXP07", "13": "EXP10", "14": "EXP11", "15": "EXP12", "16": "EXP13",
     "17": "EXP14", "18": "EXP15", "19": "EXP16", "20": "EXP17"})
 cap("C36", "100n", "+3V3")
 res("R60", "10k", "EXP_INT", "+3V3")
 res("R61", "100k", "CHRG", "+3V3")       # CHRG also sinks D12 (from +5V); reads ~3.3 V when idle
 res("R62", "100k", "DONE_N", "+3V3")
 # spare expander pins tied low (datasheet: unused I/O to VCC or GND through ~10k); ETH_RST pulled up
-for ref, nets in (("RN1", ("EXP06", "EXP07", "EXP10", "EXP11")), ("RN2", ("EXP12", "EXP13", "EXP14", "EXP15")),
+# RN1-1 also holds DISP_RST low, so a fitted TFT stays in reset until firmware drives P06
+for ref, nets in (("RN1", ("DISP_RST", "EXP07", "EXP10", "EXP11")), ("RN2", ("EXP12", "EXP13", "EXP14", "EXP15")),
                   ("RN3", ("EXP16", None, None, None))):   # EXP17: no room to route; firmware drives it low
     pads = {}
     for k, n in enumerate(nets, 1):      # resistors are pin k <-> pin 9-k
@@ -303,11 +311,11 @@ for ref, nets in (("RN1", ("EXP06", "EXP07", "EXP10", "EXP11")), ("RN2", ("EXP12
     part(ref, "rarray4", "4x10k", "C29718", pads)
 res("R76", "10k", "ETH_RST", "+3V3")
 part("J19", "hdr2x6", "EXPANSION", None,
-     {"1": "+3V3", "2": "GND", "3": "EXP06", "4": "EXP07", "5": "EXP10", "6": "EXP11", "7": "EXP12",
+     {"1": "+3V3", "2": "GND", "3": "DISP_RST", "4": "EXP07", "5": "EXP10", "6": "EXP11", "7": "EXP12",
       "8": "EXP13", "9": "EXP14", "10": "EXP15", "11": "EXP16", "12": "EXP17"})
 
 # --- Block 13 (rev 10): relay -- driver fitted, relay and terminals NOT fitted ------------------
-# NOT FITTED by default: a reader-side board should have no path to a lock. Fit only where a relay output is wanted.
+# NOT FOR A READER-SIDE BOARD: a board at the door must have no path to a strike. Spare boards only.
 res("R63", "1k", "RELAY_DRV", "Q12_G")
 res("R64", "100k", "Q12_G", "GND")
 part("Q12", "sot23_2n7002", "AO3400A", "C20917", {"1": "Q12_G", "2": "GND", "3": "RELAY_COIL"})   # fully on at 3.3 V gate

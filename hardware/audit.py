@@ -8,8 +8,14 @@
 3. Parts inside an M3 screw-head keep-out (4.0 mm radius from each hole centre).
 4. Tall parts inside the area a plugged-in OLED covers (8.5 mm socket height).
 5. Copper near the ESP32 antenna on the board edge.
+6. Silkscreen legibility (rev 11, after labels on the rev 10 boards turned out blocked or
+   overcrowded): every silk text against other texts, pads (the mask opening clips it), other parts'
+   silk outlines, fitted parts' bodies (hidden once assembled), the board edge, and -- for the
+   status LEDs and their labels -- the area a plugged-in OLED covers. KiCad's DRC checks none of
+   the last three, and its silk_overlap is flooded by terminal blocks' interlocking outlines.
 
-    python3 audit.py
+    python3 audit.py            # all sections (on the routed board)
+    python3 audit.py --silk     # section 6 only; works on the unrouted board straight from build_pcb.py
 """
 import os
 import sys
@@ -65,6 +71,72 @@ def gap(a, b):
 
 fps = [f for f in board.GetFootprints() if not f.GetReference().startswith(("H", "TP"))]
 bodies = {f.GetReference(): body(f) for f in fps}
+j5 = board.FindFootprintByReference("J5").GetPosition()
+ox, oy = ToMM(j5.x), ToMM(j5.y)
+oled = (ox - 17.5, oy - 1.5, ox + 17.5, oy + 32.5)
+STATUS_LEDS = ("D8", "D23")
+STATUS_LABELS = ("OK", "FAULT")
+
+
+def silk_audit():
+    """Section 6. Returns the number of problems."""
+    print("\n== 6. silkscreen text: clear of texts (0.25), pads (0.2), outlines (0.15), fitted bodies, edge (0.5)")
+    F, B = pcbnew.F_SilkS, pcbnew.B_SilkS
+    cu = {F: pcbnew.F_Cu, B: pcbnew.B_Cu}
+    texts = [(t.GetText(), t.GetLayer(), _bb(t)) for t in board.GetDrawings()
+             if t.GetClass() == "PCB_TEXT" and t.GetLayer() in (F, B)]
+    outlines = {F: [], B: []}           # (ref, box) per silk primitive; rectangles split into edges
+    for f in board.GetFootprints():
+        for g in f.GraphicalItems():
+            if g.GetClass() != "PCB_SHAPE" or g.GetLayer() not in (F, B):
+                continue
+            if g.GetShape() in (pcbnew.SHAPE_T_RECT, pcbnew.SHAPE_T_POLY):
+                c = [(ToMM(p.x), ToMM(p.y)) for p in g.GetCorners()]
+                for a, b in zip(c, c[1:] + c[:1]):
+                    outlines[g.GetLayer()].append((f.GetReference(), (min(a[0], b[0]), min(a[1], b[1]),
+                                                                       max(a[0], b[0]), max(a[1], b[1]))))
+            else:
+                outlines[g.GetLayer()].append((f.GetReference(), _bb(g)))
+    x0, y0, x1, y1 = _bb(next(d for d in board.GetDrawings() if d.GetLayer() == pcbnew.Edge_Cuts))
+    for d in board.GetDrawings():
+        if d.GetLayer() == pcbnew.Edge_Cuts:
+            e = _bb(d)
+            x0, y0, x1, y1 = min(x0, e[0]), min(y0, e[1]), max(x1, e[2]), max(y1, e[3])
+    probs = 0
+    for i, (s, L, bx) in enumerate(texts):
+        out = set()
+        for j, (s2, L2, b2) in enumerate(texts):
+            if j != i and L2 == L and gap(bx, b2) < 0.25:
+                out.add(f"text '{s2}'")
+        for f in board.GetFootprints():
+            ref = f.GetReference()
+            for p in f.Pads():
+                if p.IsOnLayer(cu[L]) and gap(bx, _bb(p)) < 0.2:
+                    out.add(f"pad {ref}.{p.GetNumber()}")
+            if ref in fitted and f.GetLayer() == cu[L] and not ref.startswith(("JP", "TP")) \
+                    and gap(bx, bodies.get(ref, body(f))) < 0:
+                out.add(f"under {ref}")
+        for ref, ob in outlines[L]:
+            if gap(bx, ob) < 0.15:
+                out.add(f"outline {ref}")
+        if bx[0] < x0 + 0.5 or bx[1] < y0 + 0.5 or bx[2] > x1 - 0.5 or bx[3] > y1 - 0.5:
+            out.add("board edge")
+        if s in STATUS_LABELS and L == F and gap(bx, oled) < 0:
+            out.add("under the OLED")
+        if out:
+            probs += 1
+            print(f"   {'F' if L == F else 'B'} {chr(39) + s + chr(39):26s} {', '.join(sorted(out))}")
+    for ref in STATUS_LEDS:
+        if ref in bodies and gap(bodies[ref], oled) < 0:
+            probs += 1
+            print(f"   {ref}: status LED under a plugged-in OLED {tuple(round(v, 1) for v in oled)}")
+    print(f"   {probs} problems in {len(texts)} texts")
+    return probs
+
+
+if "--silk" in sys.argv:
+    sys.exit(1 if silk_audit() else 0)
+
 print("== 1. body clashes (gap < 0.3 mm; 'overlap' = bodies intersect)")
 n = 0
 refs = sorted(bodies)
@@ -118,9 +190,6 @@ for h in holes:
             print(f"   {h.GetReference()} @ {hc}: {ref} body {d:.1f} mm from centre")
 
 print("\n== 4. tall parts under a plugged-in OLED (J5 socket, module ~35 x 34 mm hanging below it)")
-j5 = board.FindFootprintByReference("J5").GetPosition()
-ox, oy = ToMM(j5.x), ToMM(j5.y)
-oled = (ox - 17.5, oy - 1.5, ox + 17.5, oy + 32.5)
 for ref, bx in bodies.items():
     if ref != "J5" and gap(bx, oled) < 0 and TALL.get(ref, 2.5) >= 7.0:
         print(f"   {ref}: {TALL[ref]} mm tall inside the OLED footprint {tuple(round(v, 1) for v in oled)}"
@@ -131,9 +200,11 @@ u1 = board.FindFootprintByReference("U1")
 ux = ToMM(u1.GetPosition().x)
 ant = (ux - 9.0 - 3.0, 100.0, ux + 9.0 + 3.0, 103.0)
 hits = set()
-for t in board.GetTracks():
-    bb = t.GetBoundingBox()
-    b = (ToMM(bb.GetLeft()), ToMM(bb.GetTop()), ToMM(bb.GetRight()), ToMM(bb.GetBottom()))
-    if gap(b, ant) < 0:
+zone = pcbnew.BOX2I(pcbnew.VECTOR2I(pcbnew.FromMM(ant[0]), pcbnew.FromMM(ant[1])),
+                    pcbnew.VECTOR2L(pcbnew.FromMM(ant[2] - ant[0]), pcbnew.FromMM(ant[3] - ant[1])))
+for t in board.GetTracks():          # the track itself, not its bounding box (rev 11: a diagonal's box
+    if t.HitTest(zone, False, 0):    # reached into the zone while the track passed 1.4 mm outside it)
         hits.add(t.GetNetname())
 print(f"   tracks in {ant}: {sorted(hits) or 'none'}  (ground pour is also present up to the edge)")
+
+silk_audit()

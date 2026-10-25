@@ -1,7 +1,17 @@
-# Design notes — revision 10
+# Design notes — revision 11
 
 How the board works, why, and how to test it. `hardware/netlist.py` is the authority on what
 connects to what; this document explains it.
+
+**Revision 11** (the files in this repository, not yet ordered) differs from **revision 10** (built
+and tested; tag `rev-10b`) in three ways:
+- **Status pair:** D8 becomes red `FAULT` (IO21, ESPHome's status LED: a slow blink is a warning, a
+  fast blink an error), and a new D23 green `OK` (IO47 through R81 1 kΩ) is lit while Home Assistant
+  is connected. They sit left of the OLED, so a fitted screen doesn't hide them.
+- **Display reset:** `DISP_RST` moves from IO47 to expander P06, which J19 pin 3 now shares. On a
+  rev 10 board IO47 only reaches the unfitted J6, so rev 11 firmware is harmless there.
+- **Silkscreen:** every label is held clear of pads, outlines, fitted parts and other text, checked by
+  `audit.py --silk`. Rev 10 had 41 such problems in 70 labels.
 
 ## The property this board must not break
 
@@ -54,7 +64,7 @@ Keep the logger at `INFO` in service. At `DEBUG`, ESPHome logs the Wiegand frame
    Wiegand D0/D1 ◄─ U4 74LVC2G17 ◄─ 1k + 5.1 V zener + 100 pF ◄─ SM712 ◄─ J10
    LED / BEEP ─► Q1 / Q2 2N7002 open drain ─► SM712 ─► J11
    I²C (IO41/42) ─► OLED J5, Qwiic J18, TCA9535 expander U8 (0x20)
-   SPI (IO10–14, RST IO47) ─► J6 (TFT / e-paper); W5500 header J17 shares SCK/MOSI
+   SPI (IO10–14, RST expander P06) ─► J6 (TFT / e-paper); W5500 header J17 shares SCK/MOSI
    IN1–IN4 (IO15–18) ◄─ 2N7002 isolation ◄─ SMF36CA ◄─ J9/J12/J13
    RS-485 (UART0, DE IO38) ─► SP3485 ─► SM712 ─► J20
 ```
@@ -140,18 +150,19 @@ be tested.
 | IO10 / 11 / 12 / 13 | SPI CS / MOSI / SCK / DC | J6 |
 | IO14 | TFT backlight **or** e-paper BUSY | J6 |
 | IO15–IO18 | IN1–IN4 | via Q7–Q10 |
-| IO21 | Status LED | sinks D8 |
+| IO21 | Status LED, red `FAULT` | sinks D8 |
 | IO35 / 36 / 37 | W5500 MISO / CS / INT | J17 |
 | IO38 | RS-485 DE/RE | |
 | IO39 | Expander interrupt | U8 `INT` |
 | IO41 / IO42 | I²C SDA / SCL | |
-| IO47 | Display reset | J6 |
+| IO47 | Green `OK` LED | sinks D23 via R81 (rev 10: display reset to J6) |
 | IO48 | Reader shed | high (default) = reader on |
 | TXD0 / RXD0 | RS-485 | logs go over USB instead |
 | IO19 / IO20 | USB D− / D+ | J1 |
 
 **TCA9535 expander (U8, 0x20):** P00 relay drive (not fitted), P01 `CHRG`, P02 `DONE`, P03 external
-power present, P04 5 V power-good, P05 W5500 reset, P06–P17 to the 2×6 expansion header J19.
+power present, P04 5 V power-good, P05 W5500 reset, P06–P17 to the 2×6 expansion header J19. Since
+rev 11, P06 is also the display reset (`DISP_RST`, J6 pin 7), shared with J19 pin 3.
 
 ## Connectors
 

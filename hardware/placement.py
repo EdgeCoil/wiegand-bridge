@@ -46,7 +46,7 @@ at("J13", TERM_X, 161.32, 270)
 for n, (q, rs, rp, c) in enumerate((("Q7", "R40", "R44", "C27"), ("Q8", "R41", "R45", "C28"),
                                    ("Q9", "R42", "R46", "C29"), ("Q10", "R43", "R47", "C30"))):
     y = 137.5 + n * 5.5
-    at(rs, 113.4, y, 0)
+    at(rs, 114.4, y, 0)   # rev 11: 1 mm right, so the IN labels clear its pad
     at(q, 116.9, y, 0)
     at(rp, 120.4, y - 0.9, 0)
     at(c, 120.4, y + 0.9, 0)
@@ -82,7 +82,7 @@ at("R10", 134.0, 177.0, 0)
 # --- tamper ------------------------------------------------------------------------------------
 at("SW3", 117.0, 162.0, 0)
 at("R35", 121.8, 158.6, 0)
-at("J8", 113.6, 167.5, 90)
+at("J8", 113.6, 168.6, 90)     # rev 11: down 1.1 mm so the TAMPER label clears it
 
 # --- 3.3 V buck-boost (under the OLED; all low parts) -------------------------------------------
 at("U3", 137.0, 131.0, 0)
@@ -94,12 +94,16 @@ at("R3", 133.0, 137.4, 0)
 at("D7", 136.6, 137.4, 180)
 
 # --- screens, status LED, I2C pull-ups (top right) ----------------------------------------------
-at("J5", 156.0, 103.5, 0)     # OLED module hangs x 138-174: >= 15 mm from the antenna (layout review)
+at("J5", 158.4, 103.5, 0)     # rev 11: +2.4 mm so its legend clears J6. OLED module hangs x 141-176: >= 15 mm from the antenna (layout review)
 at("J6", 152.0, 109.6, 270)
-at("R36", 130.0, 103.0, 0)
-at("R37", 130.0, 105.0, 0)
-at("R8", 130.0, 108.0, 0)
-at("D8", 130.0, 110.6, 180)
+# rev 11 (2026-10-20): a green OK / red FAULT pair, stacked left of a plugged-in OLED (x < 138.5)
+# so it stays visible; labels to their right, above J6. I2C pull-ups moved under the OLED (low parts).
+at("D23", 130.0, 102.9, 180)   # green, IO47
+at("D8", 130.0, 105.9, 180)    # red, IO21 (ESPHome status LED)
+at("R81", 130.0, 110.2, 0)
+at("R8", 130.0, 112.2, 0)
+at("R36", 146.0, 102.6, 0)
+at("R37", 146.0, 104.4, 0)
 
 # --- 5 V OR, VSYS, ext sense ---------------------------------------------------------------------
 at("D3", 157.0, 152.0, 0)      # +5V_BUCK pad (2) on the right, beside the output caps
@@ -155,8 +159,8 @@ at("C35", 166.4, 151.6, 90)
 
 # --- relay (NOT FITTED; spare boards only) ---------------------------------------------------------
 at("K1", 170.4, 127.5, 90)
-at("J15", 184.7, 124.0, 90)
-at("J16", 184.7, 134.16, 90)
+at("J15", 184.7, 124.4, 90)   # rev 11: down 0.4 mm for J4's + - T T legend
+at("J16", 184.7, 134.56, 90)
 at("Q12", 166.0, 141.0, 0)
 at("D14", 171.5, 141.0, 0)
 at("R63", 161.8, 139.9, 0)
@@ -192,7 +196,7 @@ at("R60", 143.4, 117.6, 0)
 at("R61", 143.1, 119.4, 0)
 at("R62", 143.1, 121.2, 0)
 at("J19", 129.5, 146.0, 90)    # expansion header, 1x12, pins run left -> right
-at("J17", 158.2, 107.0, 90)    # W5500 module header, 1x8 (moved for J5 and J4; not usable with the OLED plugged in)
+at("J17", 157.1, 110.1, 90)    # W5500 module header, 1x8, not usable with the OLED plugged in (rev 11: down, clear of J5's legend)
 at("J18", 160.0, 145.0, 0)      # Qwiic
 at("U9", 162.0, 178.0, 0)       # SP3485, beside J20
 at("C37", 166.4, 178.0, 90)
@@ -201,16 +205,16 @@ at("R66", 157.6, 176.6, 90)
 at("R67", 156.0, 176.6, 90)
 at("R68", 166.4, 174.6, 90)
 at("JP2", 168.6, 179.0, 90)
-at("D19", 157.6, 181.6, 0)
-at("R72", 150.4, 177.8, 90)
-at("JP3", 150.4, 181.2, 90)
-at("R73", 153.0, 177.8, 90)
-at("JP4", 153.0, 181.2, 90)
-at("D15", 131.5, 180.6, 0)      # D0/D1 at J10
-at("D16", 127.0, 181.0, 0)      # LED/BEEP at J11
+at("D19", 157.6, 180.2, 0)
+at("R72", 149.9, 177.4, 0)    # rev 11: horizontal, so JP3/JP4 can move up clear of the A/B labels
+at("JP3", 150.4, 180.4, 90)   # rev 11: up 0.8 mm, clear of the A/B labels
+at("R73", 153.5, 177.4, 0)
+at("JP4", 153.0, 180.4, 90)
+at("D15", 131.5, 180.0, 0)      # D0/D1 at J10
+at("D16", 127.0, 180.2, 0)      # LED/BEEP at J11 (rev 11: up, clear of the terminal labels)
 at("D17", 124.6, 137.5, 90)     # IN1/IN2
 at("D18", 124.6, 143.0, 90)     # IN3/IN4
-at("R59", 146.6, 181.3, 0)      # reader shunt at J3
+at("R59", 146.6, 180.7, 0)      # reader shunt at J3
 at("U10", 142.5, 178.6, 0)
 at("R69", 142.5, 175.4, 0)
 at("R70", 138.8, 175.4, 0)

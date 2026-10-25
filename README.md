@@ -8,8 +8,10 @@ or just log who came in.
 
 ![The board](hardware/fab/render-top.png)
 
-> **Status: revision 10 is built, tested and working.** The files here are rev 10b, which differs
-> from the tested boards only in the back silkscreen (it adds the source link).
+> **Status: revision 10 is built, tested and working.** The files here are **revision 11**, which
+> is routed and checked but not yet ordered: it adds a red/green status LED pair and cleans up the
+> silkscreen (see [`docs/design.md`](docs/design.md)). The tested design is tag
+> [`rev-10b`](https://github.com/EdgeCoil/wiegand-bridge/tree/rev-10b).
 
 ## Why it only reports
 
@@ -95,6 +97,7 @@ For the first power-up, follow the staged bench tests at the end of [`docs/desig
 
 **Brains and expansion**
 - ESP32-S3-WROOM-1-N8R2 with Wi-Fi and BLE; native USB-C for flashing and logs
+- Status LEDs: red `FAULT` (warnings and errors) and green `OK` (connected to Home Assistant)
 - TCA9535 expander for status lines and spares; Qwiic, W5500 Ethernet and 2×6 expansion headers
 - SM712 surge and ESD protection on every field wire
 - Optional relay footprint, **not fitted** by default (see *Security* in the design doc)
@@ -132,7 +135,8 @@ can also pretend to be a reader towards an existing access controller.
 1. Upload `hardware/fab/wiegand-bridge-gerbers.zip` to JLCPCB and choose **4 layers**.
 2. Turn on **PCB Assembly**, top side, and upload `wiegand-bridge-bom.csv` and `wiegand-bridge-cpl.csv`.
 3. **Check every polarised part in the placement preview** before confirming: diodes, LEDs, ICs,
-   the ESP32 and the USB-C.
+   the ESP32 and the USB-C. On rev 11, look especially at the status LEDs D8 and D23 (D8 changed
+   footprint family).
 
 JLCPCB doesn't fit the battery connector housing and cell, the OLED module, or any unpopulated
 headers. Add those yourself.

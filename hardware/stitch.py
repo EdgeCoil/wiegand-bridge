@@ -36,11 +36,11 @@ for t in board.GetTracks():
 sig = [g for L, g in grids.items() if L != pcbnew.In1_Cu]
 # GND SMD pads are not obstacles in `grids` (same net), but a via inside one leaves an open hole in a
 # solder joint (DFM review 2026-10-11): keep via centres 0.45 mm outside every pad's mask opening.
+# Through-hole pads too (rev 11): hole spacing alone let --islands drop vias into J6/J19 GND pads.
 padmask = bytearray(F.NX * F.NY)
 for fp in board.GetFootprints():
     for p in fp.Pads():
-        if p.GetDrillSize().x == 0:
-            F.mark_box(padmask, p.GetBoundingBox(), 0.45 - 0.2)
+        F.mark_box(padmask, p.GetBoundingBox(), 0.45 - 0.2)
 sig.append(padmask)
 # obstacles are inflated by clearance + half a 0.25 mm track (+ half a grid step); a 0.6 mm via needs
 # 0.175 mm more than a track's centreline, so 2 grid cells of free space around the centre is enough.

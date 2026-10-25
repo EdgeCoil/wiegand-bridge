@@ -2,7 +2,8 @@
 # SPDX-License-Identifier: MIT
 # edgecoil wiegand-bridge -- ESPHome config for the revision 10 board (hardware/).
 #
-# Tested on the rev 10 board. Work through docs/design.md *Bench tests* before relying on a new one.
+# Written for the rev 11 board, and tested on rev 10, where IO47 (rev 11's green OK LED) goes only to
+# the unfitted J6, so driving it is harmless. Work through docs/design.md *Bench tests* first.
 # The OLED is an optional package (wiegand-bridge-oled.yaml): include it once a screen is fitted.
 #
 # THIS DEVICE ONLY REPORTS. There is no relay output defined: credentials go to Home Assistant as
@@ -184,6 +185,24 @@ output:
     pin:
       number: GPIO48
       inverted: true             # R18 holds IO48 high = reader on; turn_on drives it low = shed
+  - platform: gpio
+    id: status_ok_led
+    pin:
+      number: GPIO47
+      inverted: true             # rev 11: D23 green OK sinks into the pin (rev 10: J6 RST, not fitted)
+
+# Status pair (rev 11): red FAULT = ESPHome's status LED (slow blink warning, fast blink error);
+# green OK = steady while a client (Home Assistant) is connected to the API.
+interval:
+  - interval: 1s
+    then:
+      - if:
+          condition:
+            api.connected:
+          then:
+            - output.turn_on: status_ok_led
+          else:
+            - output.turn_off: status_ok_led
 
 
 
@@ -192,7 +211,7 @@ light:
     name: "${friendly_name} status"
     pin:
       number: GPIO21
-      inverted: true             # D8 sinks into the pin
+      inverted: true             # D8 sinks into the pin (red FAULT since rev 11; yellow on rev 10)
 
 binary_sensor:
   - platform: status

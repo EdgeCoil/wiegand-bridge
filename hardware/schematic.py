@@ -161,7 +161,7 @@ rows = "".join(f'<text x="40" y="{150 + 26 * i}" font-size="16" font-family="san
 open(cover, "w").write(f'<svg xmlns="http://www.w3.org/2000/svg" width="800" height="{220 + 26 * len(pages)}">'
                        f'<rect width="100%" height="100%" fill="white"/>'
                        f'<text x="40" y="60" font-size="28" font-family="sans-serif" font-weight="bold">'
-                       f'Wiegand reader bridge — revision 10 schematic</text>'
+                       f'Wiegand reader bridge — revision 11 schematic</text>'
                        f'<text x="40" y="95" font-size="14" font-family="sans-serif">Generated from netlist.py '
                        f'(netlistsvg). Supply nets are flags; nets shared between blocks are named ports. '
                        f'IC pins are shown as name.number.</text>{rows}</svg>')
