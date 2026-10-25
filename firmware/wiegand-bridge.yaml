@@ -2,8 +2,10 @@
 # SPDX-License-Identifier: MIT
 # edgecoil wiegand-bridge -- ESPHome config for the revision 10 board (hardware/).
 #
-# UNTESTED ON HARDWARE. Written to prove the board's pin map compiles; flash it once a board exists
-# and work through docs/design.md *Bench tests* first.
+# The rev 10 board is built and tested; work through docs/design.md *Bench tests* before relying on
+# a new one. This is the reference configuration for its pin map. The tested installation runs a
+# derivative of it that adds a doorbell event on '#', a masked entry display and a pulsed "granted"
+# pattern; those additions are not in this file yet.
 #
 # THIS DEVICE ONLY REPORTS. There is no relay output defined: credentials go to Home Assistant as
 # events, HA decides, and any unlock happens elsewhere, through whatever actuator HA already controls.

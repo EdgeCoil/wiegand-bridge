@@ -1,65 +1,139 @@
-# wiegand-bridge
+# Wiegand Bridge
 
-An ESP32-S3 board that connects a standard **Wiegand keypad / card reader** to **Home Assistant**
-through ESPHome. The reader's codes and card numbers reach HA as events; HA decides what happens.
+Connect a standard **Wiegand keypad or card reader** to **Home Assistant**.
 
-**The board only reports.** It has no output toward a lock. It is designed for the reader side of a
-door, where anyone can reach it, so the part that unlocks anything stays somewhere else.
+The reader plugs into this board, and the board sends every PIN and card it sees to Home Assistant
+over Wi-Fi (ESPHome). Your automations decide what happens next: unlock a door, disarm an alarm,
+or just log who came in.
 
-![Top](hardware/fab/render-top.png)
+![The board](hardware/fab/render-top.png)
 
-> **Status: revision 10, first boards in manufacture, not yet tested on hardware.** The files here
-> are rev 10b, which differs only in the back silkscreen (it adds the source link). Treat
-> everything here as unverified until the bench tests in [`docs/design.md`](docs/design.md) pass.
+> **Status: revision 10 is built, tested and working.** The files here are rev 10b, which differs
+> from the tested boards only in the back silkscreen (it adds the source link).
+
+## Why it only reports
+
+**The board never unlocks anything.** It has no output to a lock. The reader sits outside the door
+where anyone can reach it, so the part that actually opens the door stays inside, behind Home
+Assistant. Prising the board off the wall and shorting wires opens nothing.
+
+A stolen board can still give away your Wi-Fi passphrase and its Home Assistant API key, which
+are in its flash. [`docs/design.md`](docs/design.md) (*Security — assume it gets stolen*) covers
+the precautions: an isolated IoT network, checking the event's `device_id` in your automation, and
+alerting on the tamper switch.
+
+## How it works
+
+```
+ keypad / card reader ──Wiegand──▶ Wiegand Bridge ──Wi-Fi──▶ Home Assistant ──▶ your lock, alarm, …
+          ▲                                │                       │
+          └──── beep + LED feedback ◀──────┴──── "granted" / "denied" ┘
+```
+
+1. Someone enters a PIN (ending in `#`) or presents a card.
+2. The board sends a Home Assistant event, `esphome.wiegand_bridge`, with `type` set to `code` or
+   `fob` and the PIN or card number in `value`.
+3. Your automation checks it and does whatever you want.
+4. It calls `feedback_granted` or `feedback_denied` on the board, which flashes and beeps the reader
+   and shows the result on the screen.
+
+A minimal automation:
+
+```yaml
+triggers:
+  - trigger: event
+    event_type: esphome.wiegand_bridge
+    event_data: { type: code }
+conditions:
+  - condition: template
+    value_template: "{{ trigger.event.data.value == states('input_text.door_pin') }}"
+actions:
+  - action: esphome.wiegand_bridge_feedback_granted
+  - action: lock.unlock
+    target: { entity_id: lock.front_door }
+```
+
+## Getting started
+
+1. **Order the board** (see [Ordering](#ordering)). JLCPCB assembles almost everything.
+2. **Wire the reader** to the reader terminals: J3 (`+12V`, `GND`), J10 (`D0`, `D1`) and J11 (`LED`,
+   `BEEP`, optional). Set the reader to 26-bit Wiegand. Wire colours vary between readers, so follow
+   your reader's own leaflet. The full connector list is in [`docs/design.md`](docs/design.md).
+3. **Power it** from 6–36 V (screw terminal or 5.5 mm barrel jack, centre positive), or from USB-C on
+   the bench.
+4. **Flash the firmware** over USB-C with ESPHome: [`firmware/wiegand-bridge.yaml`](firmware/wiegand-bridge.yaml).
+   It needs four entries in your `secrets.yaml`: `wifi_ssid`, `wifi_password`,
+   `wiegand_bridge_api_key` and `wiegand_bridge_ota_password`.
+5. **Adopt it in Home Assistant** (ESPHome integration) and write your automation.
+
+For the first power-up, follow the staged bench tests at the end of [`docs/design.md`](docs/design.md).
 
 ## Features
 
-- **ESP32-S3-WROOM-1-N8R2**, with Wi-Fi and BLE; native USB-C for flashing and logs
-- **6–36 V input** (screw terminal or 5.5 mm barrel jack, centre positive), reverse-polarity and surge protected
-- **Regulated reader supply** (12.6 V boost, or 13.2 V by solder jumper) from every power source,
-  with current sensing, voltage monitoring and firmware-controlled shedding
-- **Wiegand D0/D1** through a 5 V-tolerant Schmitt buffer, clamped against 12 V miswiring;
-  open-drain **LED** and **BEEP** outputs to the reader
-- **LiFePO4 backup**: on-board charger (CN3058E, 3.6 V), cell protection (DW01A + FS8205A),
+**Reader**
+- Wiegand D0/D1 through a 5 V-tolerant Schmitt buffer, clamped against 12 V miswiring
+- Open-drain LED and BEEP outputs back to the reader
+- RS-485 port (SP3485) for OSDP readers, with jumper-selectable termination and bias
+
+**Power**
+- 6–36 V input, reverse-polarity and surge protected
+- Regulated reader supply from every power source: 12.6 V (13.2 V by solder jumper), with current
+  sensing, voltage monitoring and firmware-controlled shedding
+- LiFePO4 backup: on-board charger (CN3058E, 3.6 V), cell protection (DW01A + FS8205A),
   thermistor-gated charging, seamless handover when external power drops
-- **Tamper switch** under the lid, plus a header for an enclosure-mounted one
-- **Four dry-contact inputs** (door contact, exit button, etc.), 24 V-tolerant
-- **1.3" SH1106 OLED** socket (I²C), plus an SPI header for a TFT or e-paper
-- **RS-485** port (SP3485) for OSDP readers, with jumper-selectable termination and bias
-- **TCA9535** expander for status lines and spares; **Qwiic**, **W5500** Ethernet and 2×6
-  expansion headers
-- **SM712** surge/ESD protection on every field wire
-- Optional **relay** footprint, not fitted by default (see *Security* in the design doc)
-- 90 × 95 mm, 4 layers, assembled by JLCPCB
 
-## LITE — under development
+**Sensing and display**
+- Tamper switch under the lid, plus a header for an enclosure-mounted one
+- Four dry-contact inputs (door contact, exit button and so on), 24 V-tolerant
+- Socket for a 1.3" SH1106 OLED (I²C), plus an SPI header for a TFT or e-paper
 
-A 42 × 44 mm sibling for the case where the reader already has its supply: ESP32-S3-MINI-1,
-8–16 V in, USB-C, one 8-way pluggable terminal, D0/D1/LED/BEEP all bidirectional (it can also
-emulate a reader toward an access controller), RS-485 kept. **Designed, routed and checked; no
-board made yet.** [`docs/lite.md`](docs/lite.md), [`hardware/lite/`](hardware/lite/),
-[`firmware/wiegand-bridge-lite.yaml`](firmware/wiegand-bridge-lite.yaml).
+**Brains and expansion**
+- ESP32-S3-WROOM-1-N8R2 with Wi-Fi and BLE; native USB-C for flashing and logs
+- TCA9535 expander for status lines and spares; Qwiic, W5500 Ethernet and 2×6 expansion headers
+- SM712 surge and ESD protection on every field wire
+- Optional relay footprint, **not fitted** by default (see *Security* in the design doc)
+
+**Board:** 90 × 95 mm, 4 layers, assembled by JLCPCB.
+
+## LITE (in development)
+
+A 42 × 44 mm sibling for readers that already have their own supply: ESP32-S3-MINI-1, 8–16 V in,
+USB-C, one 8-way pluggable terminal, and RS-485. Its D0/D1/LED/BEEP lines all work both ways, so it
+can also pretend to be a reader towards an existing access controller.
+
+**Designed, routed and checked, but no board made yet.** See [`docs/lite.md`](docs/lite.md),
+[`hardware/lite/`](hardware/lite/) and [`firmware/wiegand-bridge-lite.yaml`](firmware/wiegand-bridge-lite.yaml).
 
 ![Size comparison](hardware/lite/fab/size-comparison.png)
 
-## Repository layout
+## What's in this repository
 
 | Path | What it is |
 |---|---|
-| [`hardware/`](hardware/) | The board, **generated from Python**: `netlist.py` is the source of truth |
-| [`hardware/fab/`](hardware/fab/) | Ready-to-order outputs: Gerbers, BOM, CPL, schematic and assembly PDFs, renders |
+| [`firmware/`](firmware/) | ESPHome configurations: the full board, the LITE, and a bench-only LITE emulation package |
+| [`docs/design.md`](docs/design.md) | How it works, pin map, connectors, security notes and bench tests |
+| [`docs/breadboard.md`](docs/breadboard.md) | A through-hole breadboard version, for trying your reader before ordering |
+| [`docs/lite.md`](docs/lite.md) | The LITE board in detail |
+| [`hardware/`](hardware/) | The board, **generated from Python** (`netlist.py` is the source of truth) |
+| [`hardware/fab/`](hardware/fab/) | Ready-to-order files: Gerbers, BOM, placement, schematic and assembly PDFs, renders |
 | [`hardware/sim/`](hardware/sim/) | ngspice checks of the analogue corners |
-| [`hardware/lite/`](hardware/lite/) | **The LITE board (under development)**: its own `netlist.py`/`placement.py`, the same scripts trimmed, `fab/` outputs |
-| [`firmware/`](firmware/) | ESPHome configurations (full board; `wiegand-bridge-lite.yaml` plus its bench-only `wiegand-bridge-lite-emulation.yaml` package) |
-| [`docs/design.md`](docs/design.md) | How it works, pin map, connectors, security notes, bench tests |
-| [`docs/breadboard.md`](docs/breadboard.md) | A through-hole breadboard version for trying the reader first |
-| [`docs/lite.md`](docs/lite.md) | The LITE board: what it is, the bidirectional line cell, pin map, results, checks before ordering |
+| [`hardware/lite/`](hardware/lite/) | The LITE board's scripts and outputs |
 
-## Building the board
+## Ordering
+
+1. Upload `hardware/fab/wiegand-bridge-gerbers.zip` to JLCPCB and choose **4 layers**.
+2. Turn on **PCB Assembly**, top side, and upload `wiegand-bridge-bom.csv` and `wiegand-bridge-cpl.csv`.
+3. **Check every polarised part in the placement preview** before confirming: diodes, LEDs, ICs,
+   the ESP32 and the USB-C.
+
+JLCPCB doesn't fit the battery connector housing and cell, the OLED module, or any unpopulated
+headers. Add those yourself.
+
+## Rebuilding the board
 
 Everything under `hardware/` is produced by scripts, so the board can be rebuilt after any change.
 
-| Script | Does |
+| Script | What it does |
 |---|---|
 | `netlist.py` | Every part, its JLCPCB part number, and which net each pad joins |
 | `placement.py` | Where each part sits |
@@ -83,24 +157,19 @@ python3 fab.py
 kicad-cli pcb drc wiegand-bridge.kicad_pcb
 ```
 
-Tools used: KiCad 9.0, Freerouting 2.4.1 (OpenJDK), `easyeda2kicad` 1.0.1 (for `lib/`), ngspice 44.
+Tools: KiCad 9.0, Freerouting 2.4.1 (OpenJDK), `easyeda2kicad` 1.0.1 (for `lib/`), ngspice 44.
 
-**3D models are not included** (about 60 MB). The renders in `fab/` show the board with them. To
-fetch them, run `easyeda2kicad --3d --lcsc_id=<part> --output hardware/lib/wb` for the LCSC part
-numbers in the BOM. The 0603/0805 passives use KiCad's stock footprints, whose models come from
-`kicad-packages3d`; `fab.py` looks for them in `~/.local/share/kicad/9.0/3dmodels` (three files:
-`Resistor_SMD.3dshapes/R_0603_1608Metric`, `Capacitor_SMD.3dshapes/C_0603_1608Metric` and
-`C_0805_2012Metric`, `.step` + `.wrl`, from gitlab.com/kicad/libraries/kicad-packages3D).
+<details>
+<summary>3D models (not included)</summary>
 
-## Ordering
+The models come to about 60 MB, so they aren't in the repository; the renders in `fab/` show the
+board with them. To fetch them, run `easyeda2kicad --3d --lcsc_id=<part> --output hardware/lib/wb`
+for the LCSC part numbers in the BOM. The 0603/0805 passives use KiCad's stock footprints, whose
+models come from `kicad-packages3d`: `fab.py` looks for them in `~/.local/share/kicad/9.0/3dmodels`
+(three files: `Resistor_SMD.3dshapes/R_0603_1608Metric`, `Capacitor_SMD.3dshapes/C_0603_1608Metric`
+and `C_0805_2012Metric`, `.step` + `.wrl`, from gitlab.com/kicad/libraries/kicad-packages3D).
 
-Upload `hardware/fab/wiegand-bridge-gerbers.zip` to JLCPCB (4 layers), choose PCB Assembly
-on the top side, then upload `wiegand-bridge-bom.csv` and `wiegand-bridge-cpl.csv`. **Check every
-polarised part in the placement preview** before confirming: diodes, LEDs, ICs, the ESP32 and the
-USB-C.
-
-Not assembled by JLCPCB: the battery connector housing and cell, the OLED module, and any
-unpopulated headers.
+</details>
 
 ## Licence
 
@@ -112,16 +181,16 @@ unpopulated headers.
 
 Each source file carries an SPDX header, and [`REUSE.toml`](REUSE.toml) covers the rest by path.
 
-CERN-OHL-S is strongly reciprocal. You may build, modify and sell boards from this design, but if you
-ship a modified version you must publish its source under the same licence.
-**Source location:** https://github.com/EdgeCoil/wiegand-bridge, linked from the board's back
-silkscreen as `wiegand.edgecoil.dev`.
+CERN-OHL-S is strongly reciprocal. You may build, modify and sell boards from this design, but if
+you ship a modified version you must publish its source under the same licence. The source lives at
+https://github.com/EdgeCoil/wiegand-bridge, linked from the board's back silkscreen as
+`wiegand.edgecoil.dev`.
 
 **The edgecoil name and mark are not licensed.** Remove the mark from the silkscreen of any boards
 you make or sell, and don't sell them under the edgecoil name.
 
-The design is provided as is, with no warranty. It is unverified on hardware (see *Status*). It is
-an access-control accessory, so you are responsible for the security of any installation.
+The design is provided as is, with no warranty. It is an access-control accessory, so you are
+responsible for the security of any installation.
 
 ---
 
