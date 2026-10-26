@@ -1,7 +1,8 @@
-# Wiegand bridge LITE — design notes, revision 1
+# Wiegand bridge LITE — design notes, revision 2
 
-**Status: under development.** Designed, routed and checked (2026-10-21); the firmware compiles;
-**no board has been made.** Nothing here is verified on hardware. Files: [`hardware/lite/`](../hardware/lite/),
+**Status: under development.** Revision 1 was designed, routed and checked on 2026-10-21; revision 2
+(2026-10-27, below) takes its review's three open items and a passive-to-IC audit. The firmware
+compiles; **no board has been made.** Nothing here is verified on hardware. Files: [`hardware/lite/`](../hardware/lite/),
 [`firmware/wiegand-bridge-lite.yaml`](../firmware/wiegand-bridge-lite.yaml).
 
 ![Size comparison](../hardware/lite/fab/size-comparison.png)
@@ -19,13 +20,27 @@ runs from **12 V ± 4 V (8–16 V)**, keeps **USB-C** for programming (and bench
 | Input | 6–36 V, two regulators, battery, 12 V boost for the reader | **8–16 V → AP63203 → 3.3 V**, one stage; the reader has its own supply |
 | USB-C | programming and power | programming, **and bench power through one Schottky diode** |
 | Reader lines | D0/D1 inputs, LED/BEEP outputs | **D0, D1, LED, BEEP all bidirectional** |
-| RS-485 / OSDP | SP3485, termination and bias jumpers, node-power terminal | SP3485, termination jumper only |
+| RS-485 / OSDP | THVD1420, termination and bias jumpers, node-power terminal | THVD1420 (full fail-safe), termination jumper only |
 | Connectors | 11 screw terminals, OLED socket, headers | **one 8-way 3.5 mm pluggable block**: `12V GND D0 D1 LED BEEP A B` |
 | Status LEDs | PWR, FAULT, OK, CHG | PWR, FAULT (ESPHome status), OK (API connected) |
-| Parts | 197 | **75** (29 part numbers) |
+| Reset | RC on EN | **TPS3808 supervisor on EN**; RESET button on its MR input |
+| Parts | 188 | **76** (31 part numbers) |
 
 The security model is the full board's ([design.md](design.md), *Security*): the board reports
 credentials to Home Assistant as events and has no output toward a lock.
+
+## Revision 2
+
+| Change | Why |
+|---|---|
+| **U9 THVD1420** (C3235215) replaces the SP3485; the 20k bias pair R66/R67 is gone | Its receiver has full fail-safe: an idle, open or shorted bus reads as a 1. Rev 1's weak bias gave ~10 mV with the termination fitted, so an idle terminated bus was undefined |
+| **U3 TPS3808G30** (C189211) on EN; SW2 moves to its MR input | Open-drain, holds EN low until +3V3 passes 2.79 V, then 20 ms more (CT open). A start from a slow or pre-biased rail is defined, and the button is debounced |
+| **Q1–Q4 AO3400A** (C20917, Basic) replace the 2N7002s | Fully on at a 3.3 V gate: the 2N7002's 2.5 V worst-case threshold left ~15–20 mA, marginal for a controller's 1k pull-up to 12 V |
+| **D26 BAT54** (C22466368, Preferred) feeds the four line pull-ups (`+3V3_PU`) | A reader powered while the board is not no longer back-feeds the dead 3.3 V rail through each line's 1k + 10k |
+| **C1/C2 1206 50 V** (C13585) replace the 0805 25 V parts | The 0805s held 40–55 % of 10 µF at 12–16 V bias |
+
+U3 sits at the bottom right, between D19 and U9: the column beside the module's EN parts is taken by
+the status LEDs' labels. EN and the button line are slow signals, routed in from there.
 
 ## The bidirectional line cell
 
@@ -33,10 +48,10 @@ Each of the four reader wires carries the full board's input cell **and** its ou
 
 ```
 wire ──┬── SM712 (one per pair) ── GND
-       ├── 2N7002 drain      gate ← 100 Ω ← GPIO (drive)      100k gate → GND
+       ├── AO3400A drain     gate ← 100 Ω ← GPIO (drive)      100k gate → GND
        └── 1k ──┬── 5.1 V zener ── GND
                 ├── 100 pF ── GND
-                ├── 10k ── 3V3
+                ├── 10k ── +3V3_PU (BAT54 from 3V3)
                 └── 74LVC2G17 Schmitt buffer ── GPIO (sense)
 ```
 
@@ -50,10 +65,10 @@ wire ──┬── SM712 (one per pair) ── GND
   idle-high, so `wiegand:` stays quiet.
 - The board hears its own pulses: a frame sent in emulation mode also arrives as a tag on IO4/IO5
   and reaches HA as a fob event — which is why emulation is a bench-only package (below).
-- The 2N7002 is specified at a 5 V gate; at 3.3 V with a worst-case 2.5 V threshold it sinks
-  ~15–20 mA — enough for a reader's 1–10k pull-up, marginal for a controller's 1k to 12 V. The
-  review of 2026-10-21 recommends the AO3400A (C20917, Basic, same SOT-23 pinout, fully on at
-  3.3 V), a BOM swap with no layout change. Not applied yet.
+- The drive FET is an AO3400A since rev 2 (rev 1's 2N7002 was specified at a 5 V gate, and at
+  3.3 V with its worst-case 2.5 V threshold sank only ~15–20 mA).
+- The 10k pull-ups hang off `+3V3_PU`, fed from 3.3 V through D26 (BAT54), so the idle-high node
+  sits a diode drop below 3.3 V, still well above the buffer's 2.0 V threshold.
 
 ESPHome has no Wiegand transmitter, so `wiegand_tx` bit-bangs one in a lambda: 50 µs low per bit,
 2 ms between bits, a 1 on D1 and a 0 on D0. `wiegand_send_26` builds the standard 26-bit frame
@@ -72,24 +87,22 @@ frames are at most 31 bits.
 - **8–16 V in**, terminal pins 1–2: 0.5 A hold / 1 A trip 24 V PTC, SS34 in series for reverse
   polarity (before the TVS, so a reversed supply is blocked, not shorted), SMAJ18A C19077538
   (18 V standoff; breakdown ~20–22 V, clamp 29 V at 13.7 A, under the AP63203's 35 V absolute
-  maximum), 10 µF.
+  maximum), 10 µF (1206, 50 V since rev 2).
 - **AP63203** (fixed 3.3 V, 3.8–32 V in, 2 A, TSOT-26) as its datasheet's typical circuit: 10 µF
   in, 2 × 22 µF out, 100 nF bootstrap, 4.7 µH (3 A rated, 3.9 A saturation), EN tied to VIN (the
   datasheet allows it directly; EN's absolute maximum is 35 V), FB tied to VOUT. The part is
   flagged "not recommended for new designs" at LCSC; check stock before ordering. Fallback: the
-  full board's LMR16020 at 3.3 V. Review note: the 0805 10 µF 25 V input capacitors hold 40–55 % at
-  12–16 V bias (~8–11 µF against "greater than 10 µF" in the datasheet) — margin, not a fault; the
-  full board's 1206 50 V part (C13585) is the fix if the layout is reopened.
+  full board's LMR16020 at 3.3 V. The input capacitors are the full board's 1206 50 V part
+  (C13585) since rev 2; rev 1's 0805 25 V parts held only 40–55 % of 10 µF at 12–16 V.
 - **USB-C VBUS → SS34 → the buck input.** With 12 V present the diode is reverse-biased; from USB
   alone the buck sees 4.6 V (minimum 3.8). No ESD part on D+/D− (the port is inside the enclosure).
-- Load: the S3 (≤ 0.5 A peaks on Wi-Fi), SP3485, two buffers, three LEDs: ~0.15 A at 12 V.
+- Load: the S3 (≤ 0.5 A peaks on Wi-Fi), THVD1420, two buffers, three LEDs: ~0.15 A at 12 V.
 - **Back-feed when the reader is powered and the board is not** (the full board never had this
-  case, because it powered the reader): the reader's 5 V pull-ups reach the dead 3.3 V rail through
-  each cell's 1k + 10k (≤ ~0.4 mA per line). The buffers are rated for it; the rail floats to
-  1–2 V and the module sits below brown-out until 12 V returns, then starts from a pre-biased rail.
-  Not destructive; undefined. Recommended: one BAT54 between +3V3 and the four pull-ups' common
-  (the idle-high node drops to ~3.0 V, still well above the buffer's 2.0 V threshold). Needs a
-  re-route; not applied yet.
+  case, because it powered the reader): in rev 1 the reader's 5 V pull-ups reached the dead 3.3 V
+  rail through each cell's 1k + 10k, and the module could start from a pre-biased rail. Rev 2
+  blocks that path with D26 and, separately, holds EN low until the rail is good (U3).
+- **Reset:** U3 TPS3808G30 drives EN (open drain, R4 10k pull-up, C13 1 µF kept): EN is released
+  20 ms after +3V3 passes 2.79 V. SW2 (RESET) pulls U3's MR input, which has its own 90k pull-up.
 
 ## Pin map
 
@@ -154,7 +167,8 @@ mating plug KF2EDGK-3.5-8P, not on the BOM. The header's mouth overhangs the boa
 - JLCPCB classes (2026-10-21): fee-bearing Extended = the module, AP63203, the LVC2G17s, the PTC,
   the inductor, the USB-C and the terminal (7 types; no Basic or Preferred equivalents exist in
   JLCPCB's library for any of them); Preferred (no loading fee) = the zeners and the SMAJ18A; Basic =
-  everything else, including SP3485 and the SM712s.
+  everything else, including the SM712s. Rev 2 adds two fee-bearing Extended types (THVD1420,
+  TPS3808G30), about US$6 more per order; the BAT54 is Preferred and the AO3400A Basic.
 - Cost, JLCPCB Economic assembly, parts at the lowest tier: about US$9.45 of parts per board (the
   module is US$5), US$21 of Extended fees and US$9.50 set-up and stencil per order, plus the PCB,
   252 SMT joints per board and shipping (assumed ~US$20): roughly **US$125 for five boards,
@@ -165,12 +179,11 @@ mating plug KF2EDGK-3.5-8P, not on the BOM. The header's mouth overhangs the boa
 1. Upload the gerbers alone and read JLCPCB's DFM result.
 2. In the assembly previewer, check every polarised part: D7/D8/D23 (two LED footprints with
    opposite pin-1 ends), D1/D3 (SS34, pad 1 = cathode), **D2 (SMAJ18A, same SMA
-   footprint family as the SS34s, pad 1 = cathode)**, D5/D6/D24/D25, U1, U2, U4/U11, U9, J1.
+   footprint family as the SS34s, pad 1 = cathode)**, D5/D6/D24/D25, D26 (BAT54), U1, U2, U3,
+   U4/U11, U9, J1.
 3. J3 is through-hole: THT assembly, or drop it from the BOM/CPL and hand-fit it.
 4. Print `fab/wiegand-bridge-lite-1to1.pdf` at 100 % and lay the plug and cables on it.
 
-5. Decide the three review items above (FET, BAT54, input capacitors); if any is taken, re-route
-   and re-run `verify.py`.
 
 Before the board is adopted into HA: remove the emulation package from the build, keep "allow
 device actions" off, add a device check to the HA automation that consumes the events, and

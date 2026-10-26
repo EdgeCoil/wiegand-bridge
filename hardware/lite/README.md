@@ -11,7 +11,8 @@ rev 11 tree was not worth refactoring for this.
 | `netlist.py` | **Source of truth**: every part, its JLCPCB part number and which net each pad joins |
 | `placement.py` | Where each part sits (board 42 × 44 mm) |
 | `build_pcb.py` | Makes `wiegand-bridge-lite.kicad_pcb`, unrouted, from the two files above |
-| `route.py` | Thermal vias under the module, the USB-C VBUS pad-pair hand route, GND fan-out, Freerouting, ground pours |
+| `route.py` | Thermal vias under the module, the USB-C VBUS pad-pair hand route, GND fan-out, Freerouting, ground pours; fails on anything unconnected |
+| `freeze.py`, `routing.json` | The frozen routing: `save` records the finished board's tracks and vias, `replay` lays them back after `build_pcb.py` |
 | `padgap.py` | Pre-route: pads of different nets closer than 0.25 mm (new for this board) |
 | `verify.py` | **Every file-based check in one run** (DRC, audit, pad gaps, joint spacing, silk sizes, firmware↔netlist, polarity, open pads, BOM/CPL/gerbers, JLCPCB classes and stock); `--offline` skips the library query |
 | `stitch.py`, `via_fix.py`, `gndcheck.py`, `dfm_post.py`, `audit.py` | Post-route, as the full board; `audit.py` has no screen/battery sections |
@@ -26,6 +27,19 @@ fixes (every footprint is EasyEDA-sourced except the 0603/0805 passives, the sol
 holes).
 
 ## Rebuild
+
+The routing is **frozen** (since rev 2): `routing.json` holds every track and via of the reviewed
+board, and a rebuild replays it, so a fix is a small edit to that file rather than a new layout.
+
+```bash
+python3 build_pcb.py                 # system python3: KiCad 9's pcbnew module
+python3 freeze.py replay             # lay routing.json's copper back, rebuild the GND pours
+python3 dfm_post.py                  # copper round D1/D3
+python3 gndcheck.py && python3 audit.py && python3 fab.py && python3 schematic.py   # (fab.py clears fab/: regenerate the 1:1 PDF below)
+python3 verify.py                    # must end ALL CHECKS PASSED
+```
+
+Routing afresh, only when placement changes (the next review then covers all copper):
 
 ```bash
 python3 build_pcb.py                 # system python3: KiCad 9's pcbnew module
@@ -43,7 +57,11 @@ kicad-cli pcb export pdf --layers F.Mask,F.Silkscreen,F.Courtyard,Edge.Cuts --mo
     --black-and-white --ibt -o fab/wiegand-bridge-lite-1to1.pdf wiegand-bridge-lite.kicad_pcb
 kicad-cli pcb drc wiegand-bridge-lite.kicad_pcb
 python3 verify.py                    # everything above plus the cross-checks; must end ALL CHECKS PASSED
+python3 freeze.py save               # record the copper in routing.json
 ```
+
+`route.py` keeps rule areas (the antenna keep-out) through routing and exits non-zero if anything is
+left unconnected; re-run it from `build_pcb.py` until it exits 0.
 
 **Space parts by pad extents, not courtyards.** KiCad's 0603 courtyard is 3.0 × 1.5 mm (generous)
 while the EasyEDA footprints' courtyards stop short of their pad ends (the SMA, SOT-23 and TSOT pads

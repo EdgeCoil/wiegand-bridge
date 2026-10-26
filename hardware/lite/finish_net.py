@@ -70,7 +70,9 @@ def obstacles(board, net):
     for g in grids.values():                       # board edge keep-out
         for j in range(NY):
             for i in range(NX):
-                if i * RES < 0.6 or j * RES < 0.6 or (NX - 1 - i) * RES < 0.6 or (NY - 1 - j) * RES < 0.6:
+                # 0.7: a via centre then lands >= 0.9 mm in (2 free cells), so its 0.3 mm ring keeps the
+                # 0.5 mm copper-to-edge rule through grid rounding (0.6 let a via in at 0.466, rev 2)
+                if i * RES < 0.7 or j * RES < 0.7 or (NX - 1 - i) * RES < 0.7 or (NY - 1 - j) * RES < 0.7:
                     g[j * NX + i] = 1
     for t in board.GetTracks():
         if t.GetNetname() == net:

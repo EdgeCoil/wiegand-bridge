@@ -33,6 +33,7 @@ at("R5", 124.3, 109.2, 90)
 at("R4", 124.3, 112.2, 90)
 at("C13", 124.3, 115.2, 90)
 
+
 # --- buttons and status LEDs (top, between the buck and the module) ---------------------------------
 at("SW1", 113.3, 105.1)          # BOOT, label above
 at("SW2", 113.3, 110.6)          # RESET, label below
@@ -56,9 +57,9 @@ at("C4", 108.8, 108.0, 90)
 at("C5", 108.8, 111.5, 90)
 at("U2", 104.0, 114.9, 0)
 at("C3", 101.6, 114.9, 90)      # BST, beside pin 6
-at("C2", 106.9, 116.4, 90)      # input cap beside pin 3
-at("C1", 103.6, 118.7, 90)
-at("D2", 107.2, 123.0, 90)      # TVS in its own column: the SMA pads run 3 mm past the courtyard
+at("C2", 106.9, 117.45, 90)     # input cap beside pin 3 (rev 2: 1206, down clear of U2 and the RESET legend)
+at("C1", 103.6, 118.6, 0)       # rev 2: 1206, laid across the column to fit between U2 and D1
+at("D2", 107.2, 123.3, 90)      # TVS in its own column: the SMA pads run 3 mm past the courtyard
 at("D1", 103.5, 124.5, 90)
 at("F1", 103.6, 130.2, 0)
 
@@ -88,8 +89,9 @@ at("U9", 134.5, 131.9, 180)     # A/B pads toward the terminal
 at("R65", 134.0, 127.0, 0)
 at("R75", 137.2, 127.0, 0)
 at("C37", 140.2, 127.0, 0)
-at("R66", 138.5, 128.6, 0)
-at("R67", 138.5, 130.2, 0)
+at("D26", 139.0, 129.4, 0)      # rev 2: BAT54 feeding the line pull-ups, where the bias pair was
+at("U3", 130.0, 132.5, 90)      # rev 2: reset supervisor, between D19 and U9 (the LED labels fill the
+at("C44", 129.8, 129.6, 0)      # column beside EN); EN and RST_MR are slow signals, routed in from here
 at("R68", 133.6, 137.3, 0)
 at("JP2", 131.0, 140.0, 0, "B")   # hand-bridged: on the back, under the terminal
 

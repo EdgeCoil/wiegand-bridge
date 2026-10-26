@@ -1,6 +1,6 @@
 # SPDX-FileCopyrightText: 2026 edgecoil
 # SPDX-License-Identifier: CERN-OHL-S-2.0
-"""Wiegand bridge LITE, revision 1 -- the netlist, as data.
+"""Wiegand bridge LITE, revision 2 -- the netlist, as data.
 
 Source of truth for build_pcb.py. A stripped-down sibling of ../wiegand-bridge (rev 10/11): the
 smallest board that puts an ESP32 on a Wiegand reader (the author, 2026-10-21). It assumes the reader is
@@ -31,6 +31,19 @@ the W5500/Qwiic headers, the reader current sense.
   LVC2G17, USB-C, inductor, PTC, terminal) have no Basic or Preferred equivalent in JLCPCB's
   library (searched 2026-10-21).
 - SW1/SW2 use pads 1 and 4 only: diagonal pads are always across the switch.
+
+Revision 2 (2026-10-27), from the rev 1 review's open items and a passive-to-IC audit:
+- U9 THVD1420 (C3235215) in place of the SP3485: its receiver has full fail-safe (an idle,
+  shorted or open bus reads as a 1), so an idle TERMINATED bus is defined. Rev 1's 20k bias pair
+  (R66/R67) gave only ~10 mV once JP2 was bridged, and is gone.
+- U3 TPS3808G30 (C189211) on EN: open-drain, 2.79 V threshold, 20 ms delay (CT open). EN is
+  released only once +3V3 is good, so a start from a pre-biased or slowly rising rail is defined.
+  The RESET button moves to its MR input (debounced by the delay). R4 stays as RESET's pull-up.
+- Q1-Q4 AO3400A (C20917, Basic, same SOT-23 pinout as the 2N7002): fully on at a 3.3 V gate, so a
+  line sinks a controller's 1k pull-up to 12 V (the 2N7002's 2.5 V worst-case threshold did not).
+- D26 BAT54 (C22466368, Preferred) feeds the four 10k line pull-ups (+3V3_PU) from +3V3: a reader
+  powered while the board is not no longer back-feeds the dead 3.3 V rail through 1k + 10k per line.
+- C1/C2 1206 50 V (C13585): the 0805 25 V parts held 40-55 % of 10 uF at 12-16 V bias.
 """
 
 STD = "/usr/share/kicad/footprints"
@@ -41,6 +54,9 @@ FP = {
     "esp32mini": (WB, "BULETM-SMD_ESP32-S3-MINI-1-N8"),   # EasyEDA names the N8 footprint; every MINI-1 variant shares the land pattern
     "tsot26": (WB, "TSOT-26_L2.9-W1.6-P0.95-LS2.8-BL"),
     "sot6bl": (WB, "SOT-23-6_L2.9-W1.6-P0.95-LS2.8-BL"),
+    "sot6br": (WB, "SOT-23-6_L2.9-W1.6-P0.95-LS2.8-BR"),        # TPS3808 (EasyEDA C189211)
+    "sot23_bat54": (WB, "SOT-23-3_L2.9-W1.4-P1.90-LS2.5-BR"),   # BAT54 (EasyEDA C22466368): 1 = A, 3 = K
+    "soic8_thvd": (WB, "SOIC-8_L4.9-W3.9-P1.27-LS6.0-BL"),      # THVD1420DR (EasyEDA C3235215)
     "sot23_2n7002": (WB, "SOT-23-3_L2.9-W1.3-P1.90-LS2.4-BR"),
     "sma_ss34": (WB, "SMA_L4.3-W2.6-LS5.2-RD"),
     "sma_tvs": (WB, "SMA_L4.3-W2.6-LS5.0-RD"),
@@ -57,6 +73,7 @@ FP = {
     "r0603": ("Resistor_SMD", "R_0603_1608Metric"),
     "c0603": ("Capacitor_SMD", "C_0603_1608Metric"),
     "c0805": ("Capacitor_SMD", "C_0805_2012Metric"),
+    "c1206": ("Capacitor_SMD", "C_1206_3216Metric"),
     "sj": ("Jumper", "SolderJumper-2_P1.3mm_Open_RoundedPad1.0x1.5mm"),
     "hole": ("MountingHole", "MountingHole_3.2mm_M3"),
 }
@@ -65,7 +82,8 @@ FP = {
 R = {"100": "C22775", "1k": "C21190", "5.1k": "C23186", "10k": "C25804", "100k": "C25803",
      "20k": "C4184", "120": "C22787"}
 C = {"100p": ("c0603", "C14858"), "100n": ("c0603", "C14663"), "1u": ("c0603", "C15849"),
-     "10u25": ("c0805", "C15850"), "22u25": ("c0805", "C45783"), "22u6": ("c0603", "C59461")}
+     "10u25": ("c0805", "C15850"), "22u25": ("c0805", "C45783"), "22u6": ("c0603", "C59461"),
+     "10u50_1206": ("c1206", "C13585")}
 
 PARTS = []  # (ref, footprint key, value, lcsc or None (= hand-fitted / not placed), {pad: net})
 
@@ -80,7 +98,7 @@ def res(ref, value, a, b):
 
 def cap(ref, value, a, b="GND"):
     fp, lcsc = C[value]
-    part(ref, fp, value.replace("25", "").replace("u6", "u"), lcsc, {"1": a, "2": b})
+    part(ref, fp, value.replace("50_1206", "").replace("25", "").replace("u6", "u"), lcsc, {"1": a, "2": b})
 
 
 # --- Block 1: terminal block and 8-16 V input ------------------------------------------------------
@@ -90,12 +108,12 @@ part("J3", "term8", "12V GND D0 D1 LED BEEP A B", "C441177",
 part("F1", "f1812", "0.5A 24V", "C516067", {"1": "+VIN_RAW", "2": "+VIN_F"})   # rev 10's reader fuse part
 part("D1", "sma_ss34", "SS34", "C8678", {"1": "+VIN", "2": "+VIN_F"})   # series reverse-polarity; 1 = K
 part("D2", "sma_tvs", "SMAJ18A", "C19077538", {"1": "+VIN", "2": "GND"})   # 18 V standoff > 16 V max in; 1 = K. JLCPCB Preferred (no loading fee), 54k stock
-cap("C1", "10u25", "+VIN")
+cap("C1", "10u50_1206", "+VIN")   # rev 2: 1206 50 V, ~9 uF at 16 V
 
 # --- Block 2: buck to 3.3 V (AP63203, datasheet figure 21) ---------------------------------------
 part("U2", "tsot26", "AP63203", "C780769",
      {"1": "+3V3", "2": "+VIN", "3": "+VIN", "4": "GND", "5": "U2_SW", "6": "U2_BST"})   # FB = VOUT, EN = VIN
-cap("C2", "10u25", "+VIN")
+cap("C2", "10u50_1206", "+VIN")
 cap("C3", "100n", "U2_BST", "U2_SW")
 part("L1", "ind5040", "4.7uH", "C305174", {"1": "U2_SW", "2": "+3V3"})   # rev 10's L3
 cap("C4", "22u25", "+3V3")
@@ -129,9 +147,13 @@ part("U1", "esp32mini", "ESP32-S3-MINI-1-N4R2", "C3013941", {
     **{str(n): "GND" for n in range(46, 61)}})
 cap("C11", "22u6", "+3V3")
 cap("C12", "100n", "+3V3")
-res("R4", "10k", "+3V3", "EN")
+res("R4", "10k", "+3V3", "EN")    # the supervisor's open-drain RESET needs it
 cap("C13", "1u", "EN")
-part("SW2", "tact", "RESET", "C318884", {"1": "EN", "4": "GND"})
+# rev 2: TPS3808G30 holds EN low until +3V3 > 2.79 V, then 20 ms more (CT open). SW2 on MR.
+part("U3", "sot6br", "TPS3808G30", "C189211",
+     {"1": "EN", "2": "GND", "3": "RST_MR", "5": "+3V3", "6": "+3V3"})   # 4 = CT, open
+cap("C44", "100n", "+3V3")
+part("SW2", "tact", "RESET", "C318884", {"1": "RST_MR", "4": "GND"})   # MR has a 90k internal pull-up
 res("R5", "10k", "+3V3", "IO0")
 part("SW1", "tact", "BOOT", "C318884", {"1": "IO0", "4": "GND"})
 res("R8", "1k", "IO21", "D8_K")
@@ -155,21 +177,22 @@ for raw, node, tx, rs, z, c, rp, q, rg, rgd in CELLS:
     res(rs, "1k", raw, node)
     part(z, "sod123", "MMSZ5231B", "C19077422", {"1": node, "2": "GND"})  # 1 = K
     cap(c, "100p", node)
-    res(rp, "10k", "+3V3", node)
+    res(rp, "10k", "+3V3_PU", node)
     gate = q + "_G"
     res(rg, "100", tx, gate)
     res(rgd, "100k", gate, "GND")
-    part(q, "sot23_2n7002", "2N7002", "C8545", {"1": gate, "2": "GND", "3": raw})
+    part(q, "sot23_2n7002", "AO3400A", "C20917", {"1": gate, "2": "GND", "3": raw})   # rev 2: on at 3.3 V
+# rev 2: the pull-ups' supply, so a powered reader cannot back-feed a dead +3V3 through them
+part("D26", "sot23_bat54", "BAT54", "C22466368", {"1": "+3V3", "3": "+3V3_PU"})
 
-# --- Block 6: RS-485 / OSDP on UART0 (rev 10 block 14, less the strong-bias jumpers) ---------------
-part("U9", "soic8", "SP3485", "C8963",
+# --- Block 6: RS-485 / OSDP on UART0 (rev 10 block 14, less the bias network) ----------------------
+# rev 2: THVD1420, full fail-safe receiver, so no bias resistors are needed on this node
+part("U9", "soic8_thvd", "THVD1420", "C3235215",
      {"1": "RS485_RO", "2": "RS485_DE", "3": "RS485_DE", "4": "RS485_DI", "5": "GND",
       "6": "RS485_A", "7": "RS485_B", "8": "+3V3"})
 cap("C37", "100n", "+3V3")
 res("R65", "10k", "RS485_DE", "GND")      # receive by default, and through boot (ROM prints on TXD0)
 res("R75", "10k", "RS485_RO", "+3V3")     # RO is high-Z while transmitting (/RE tied to DE)
-res("R66", "20k", "RS485_A", "+3V3")      # weak fail-safe bias
-res("R67", "20k", "RS485_B", "GND")
 res("R68", "120", "RS485_A", "JP2_A")     # 120 ohm termination, bridge JP2 at the end of the line
 part("JP2", "sj", "TERM", None, {"1": "JP2_A", "2": "RS485_B"})
 

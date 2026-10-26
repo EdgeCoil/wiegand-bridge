@@ -258,7 +258,8 @@ def main():
     finish = "--finish" in sys.argv      # keep the existing routing; only complete what is left
     board = pcbnew.LoadBoard(PCB)
     for z in list(board.Zones()):
-        board.Remove(z)
+        if not z.GetIsRuleArea():        # keep rule areas (the antenna keep-out): Freerouting honours them
+            board.Remove(z)
     if not finish:
         for t in list(board.GetTracks()):
             board.Remove(t)
@@ -281,13 +282,23 @@ def main():
     assert os.path.exists(ses), r.stdout[-2000:] + r.stderr[-2000:]
     assert pcbnew.ImportSpecctraSES(board, ses)
     for z in list(board.Zones()):          # zones() below rebuilds every plane and pour
-        board.Remove(z)
+        if not z.GetIsRuleArea():
+            board.Remove(z)
     for v in board.GetTracks():   # Freerouting occasionally emits a degenerate via
         if v.GetClass() == "PCB_VIA" and v.GetWidth(pcbnew.F_Cu) < mm(0.6):
             v.SetWidth(mm(0.6))
     zones(board)
     pcbnew.SaveBoard(PCB, board)
     print("routed; tracks:", len(board.GetTracks()))
+    # Freerouting can stop with connections left open and still write a SES; count them, so an
+    # incomplete attempt is never mistaken for a result (rev 2's first attempt left +VIN and USB_DN).
+    import json
+    rpt = os.path.join(WORK, "route-drc.json")
+    subprocess.run(["kicad-cli", "pcb", "drc", "--format", "json", "-o", rpt, PCB], capture_output=True)
+    n = len(json.load(open(rpt)).get("unconnected_items", []))
+    print("unconnected after routing:", n)
+    if n:
+        sys.exit(2)
 
 
 if __name__ == "__main__":

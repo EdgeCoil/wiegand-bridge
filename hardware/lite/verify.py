@@ -56,7 +56,8 @@ IMPLICIT_GPIO = {19: "USB_DN", 20: "USB_DP", 0: "IO0"}       # used by the USB-J
 U1_OPEN = {"5", "6", "7", "16", "17", "18", "19", "20", "21", "22", "26", "28", "29", "30", "31", "32", "33",
            "35", "36", "37", "38", "41", "44"}
 # JLCPCB part numbers that pay the US$3 loading fee (Extended and not Preferred), as costed in the guide.
-FEE_BEARING = {"C3013941", "C780769", "C10429", "C2765186", "C305174", "C516067", "C441177"}
+FEE_BEARING = {"C3013941", "C780769", "C10429", "C2765186", "C305174", "C516067", "C441177",
+               "C3235215", "C189211"}   # rev 2: THVD1420, TPS3808G30
 ACCEPTED_DRC = {"hole_clearance", "courtyards_overlap", "silk_edge_clearance", "silk_over_copper", "silk_overlap"}
 fails = []
 
@@ -232,7 +233,7 @@ for pin in ("3", "4", "5", "6"):
 section(7, "diode / LED pin names from each symbol, with the net on each")
 WANT = {"D1": ("K", "+VIN"), "D3": ("K", "+VIN"), "D2": ("K", "+VIN"), "D7": ("K", "GND"), "D8": ("+", "+3V3"),
         "D23": ("A", "+3V3"), "D5": ("K", "D0_IN"), "D6": ("K", "D1_IN"), "D24": ("K", "LED_IN"), "D25": ("K", "BEEP_IN"),
-        "D15": ("K", "GND"), "D16": ("K", "GND"), "D19": ("K", "GND")}
+        "D15": ("K", "GND"), "D16": ("K", "GND"), "D19": ("K", "GND"), "D26": ("A", "+3V3")}
 for ref, fp, val, lcsc, pads in PARTS:
     if not ref.startswith("D"):
         continue
@@ -253,6 +254,8 @@ for f in board.GetFootprints():
         print(f"   {ref}: {nc or 'all assigned'}")
         if ref in ("U2", "U4", "U9", "U11", "J3") and nc:
             fail(f"{ref} has unassigned pads {nc}")
+        if ref == "U3" and nc != ["4"]:                     # CT open: the fixed 20 ms delay
+            fail(f"U3 open pads {nc}, expected only CT (4)")
         if ref == "U1" and set(nc) != U1_OPEN:
             fail(f"U1 open pads differ from the plan: extra {sorted(set(nc) - U1_OPEN)}, missing {sorted(U1_OPEN - set(nc))}")
         if ref == "J1" and set(nc) != {"", "A8", "B8"}:        # "" = the two unnamed NPTH locating pegs

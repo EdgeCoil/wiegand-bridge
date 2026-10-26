@@ -119,7 +119,7 @@ def labels(board):
     f = board.FindFootprintByReference("SW1").GetPosition()
     text_from(board, "BOOT", pcbnew.ToMM(f.x), silk_top(board, "SW1") - 0.2, "bottom", 1.0, 0)
     f = board.FindFootprintByReference("SW2").GetPosition()
-    text(board, "RESET", pcbnew.ToMM(f.x) - 3.0, pcbnew.ToMM(f.y) + 3.75, 1.0, 0)   # below, shifted left of U4
+    text(board, "RESET", pcbnew.ToMM(f.x) - 3.0, pcbnew.ToMM(f.y) + 3.75, 1.0, 0)   # below, between C2 and U4
     for ref, name in (("D7", "PWR"), ("D8", "FAULT"), ("D23", "OK")):   # vertical, right of each LED
         f = board.FindFootprintByReference(ref).GetPosition()
         text(board, name, pcbnew.ToMM(f.x) + 3.4, pcbnew.ToMM(f.y), 1.0, 90)
