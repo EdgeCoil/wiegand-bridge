@@ -101,6 +101,14 @@ def pours(board):
                 ol.Append(x, y)
             board.Add(z)
             print(f"pour {ref}.{p.GetNumber()} {p.GetNetname()}")
+    # rev 12 (audit round 1): a capacitor with one pad solid in a diode pour and the other on a thermal
+    # relief heats unevenly in reflow (C4: tombstoning risk). Capacitor pads in a pour get a relief too.
+    pour_nets = {z.GetNetname() for z in board.Zones() if z.GetZoneName().startswith("pour_")}
+    for fp in board.GetFootprints():
+        if fp.GetReference().startswith("C"):
+            for q in fp.Pads():
+                if q.GetNetname() in pour_nets:
+                    q.SetLocalZoneConnection(pcbnew.ZONE_CONNECTION_THERMAL)
 
 
 def main():

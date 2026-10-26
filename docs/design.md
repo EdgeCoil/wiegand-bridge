@@ -5,14 +5,27 @@ connects to what; this document explains it.
 
 **Revision 12** (the files in this repository, not yet ordered) is revision 11 (also never ordered)
 with two blocks redrawn around integrated parts, from a passive-to-IC audit:
-- **Reader monitor:** U12, an INA226 on I²C (0x40), with a 0.1 Ω **high-side** shunt between the
-  shed switch and F1. It replaces the 0.2 Ω low-side shunt with an LMV321 (×21) on IO9 and the
-  R31/R32 rail divider on IO2. The LMV321's offset is specified in millivolts against a 30 mV full
-  scale, 5 mA of error per millivolt; the INA226 guarantees ±10 µV, ±0.1 mA here. The reader's
-  return is now plain ground (the shunt no longer lifts it), and IO2 and IO9 are free.
+- **Reader monitor:** U12, an INA226 on I²C (0x40), reading R59, a 0.1 Ω alloy shunt (±1 %,
+  ±50 ppm/°C) between the boost's output capacitors and the shed switch Q11. It replaces the 0.2 Ω
+  low-side shunt with an LMV321 (×21) on IO9 and the R31/R32 rail divider on IO2. The LMV321's offset
+  is specified in millivolts against a 30 mV full scale, 5 mA of error per millivolt. On guaranteed
+  figures the reading is now within 0.2 mA + 1.5 % of reading (1.9 mA at 150 mA). The reader's return
+  is plain ground (the shunt no longer lifts it), and IO2 and IO9 are free.
+  - **Kelvin sensing by construction:** R59's footprint has a small sense tab on each land, net-tied to
+    it, and U12's IN+/IN− are on nets of their own (`ISNS_P`/`ISNS_N`), laid by `route.py`. No load
+    current can share a sense track. `kelvin.py` checks it.
+  - **Inputs never go negative:** the shunt sits on the boost side of Q11, where the 44 µF hold
+    IN+/IN− up even while the reader is shed. U12's VBUS input reads the reader terminal through R82
+    4.7 kΩ, with D27 (BAT54) holding it above the pin's −0.3 V limit when the field wire swings
+    negative.
 - **RS-485:** U9 is a THVD1420, whose receiver has full fail-safe: an idle, open or shorted bus reads
   as a 1, so this node needs no bias of its own. The 20k weak-bias pair is gone; the 390 Ω JP3/JP4
-  strong bias stays, for buses whose other nodes need it.
+  strong bias stays, for buses whose other nodes need it. R83/R84 (10 Ω) sit between the SM712 and
+  U9's A/B, because the SM712 clamps above the transceiver's ±16 V. R85 (1 kΩ) feeds RO to RXD0, so a
+  USB-UART on the test pads can override it.
+- **Also, from the review of rev 12:** IN1–IN4 have reverse clamps (D28–D31). The green LEDs have
+  470 Ω resistors. No copper runs under an M3 screw head on the outer layers. The ground pour is held
+  0.4 mm off through-hole pins.
 
 **Revision 11** differs from **revision 10** (built and tested; tag `rev-10b`) in three ways:
 - **Status pair:** D8 becomes red `FAULT` (IO21, ESPHome's status LED: a slow blink is a warning, a
@@ -89,7 +102,8 @@ Keep the logger at `INFO` in service. At `DEBUG`, ESPHome logs the Wiegand frame
 
 ## Power
 
-- **Input:** J2 (screw terminal) or J14 (5.5 mm barrel jack, centre positive), then F2 (2 A PTC). **D1** blocks reverse
+- **Input:** J2 (screw terminal) or J14 (5.5 mm barrel jack, centre positive; DC-005-class jacks are
+  commonly rated 30 V, so above 30 V use J2), then F2 (2 A PTC). **D1** blocks reverse
   polarity; **D2** (SMAJ36CA) clamps surges *after* D1, so a reversed supply can't forward-bias it
   and short the source. **Do not exceed 36 V**: the TVS starts conducting at about 40 V.
 - **U2 LMR16020** (60 V buck) makes `+5V_BUCK`. A wide input range means the board doesn't care about
@@ -100,8 +114,10 @@ Keep the logger at `INFO` in service. At `DEBUG`, ESPHome logs the Wiegand frame
   whole cell range.
 - **The reader's supply is always regulated.** U6 (MT3608) boosts `VSYS` to 12.6 V, or 13.2 V with
   JP1 bridged, whichever source is present. U12 (INA226, I²C 0x40) reads the reader current through
-  a 0.1 Ω shunt ahead of F1, and the voltage at the reader terminal itself (after F1, through R82
-  1 kΩ), so a tripped F1 shows as a low supply rather than a missing reader. **Specify the reader at
+  R59 (0.1 Ω, between the boost's capacitors and Q11). It also reads the voltage at the reader
+  terminal itself (after F1, through R82 4.7 kΩ), so a tripped F1 shows as a low supply rather than
+  a missing reader. 0x40 is also the default of several Qwiic parts (HTU21D, Si7021, HDC1080,
+  PCA9685): don't fit one of those on J18 without moving its address. **Specify the reader at
   ≤ 150 mA at 12 V**: U6
   could supply more, but the battery path, the DW01A over-current trip and F1's hot-enclosure
   derating all assume ≤ 150 mA.
@@ -140,7 +156,9 @@ boot and OTA**. GPIO high → line low → green / beep. **Confirm the polarity 
 J8 takes an enclosure-mounted switch in parallel instead.
 
 **Inputs IN1–IN4:** dry contacts to GND. Each has an SMF36CA clamp, 1 kΩ series and a 2N7002 with its
-gate at `+3V3` as an isolator: a 12 or 24 V miswire reads "off" and damages nothing.
+gate at `+3V3` as an isolator: a 12 or 24 V miswire reads "off" and damages nothing. Since rev 12 a
+1N4148W from ground on each FET's input side (D28–D31) also takes a negative miswire. Without it,
+the FET's body diode pulled the GPIO below ground (about 22 mA at −24 V).
 
 **RS-485:** THVD1420 on UART0 (TX/RX), DE/RE on IO38. Its receiver is fully fail-safe, so this board
 reads an idle bus correctly whatever the bias. Bridge **JP2** (120 Ω termination) and

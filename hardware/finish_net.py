@@ -96,6 +96,21 @@ def obstacles(board, net):
         elif t.GetLayer() in grids:
             s, e = t.GetStart(), t.GetEnd()
             mark_seg(grids[t.GetLayer()], ToMM(s.x), ToMM(s.y), ToMM(e.x), ToMM(e.y), ToMM(t.GetWidth()) / 2 + k)
+    # rule areas that forbid vias (the screw-head keep-outs): stitch.py placed five vias in them (rev 12)
+    for z in board.Zones():
+        if not (z.GetIsRuleArea() and z.GetDoNotAllowVias()):
+            continue
+        bb = z.GetBoundingBox()
+        i0, j0 = cell(ToMM(bb.GetLeft()), ToMM(bb.GetTop()))
+        i1, j1 = cell(ToMM(bb.GetRight()), ToMM(bb.GetBottom()))
+        grow = int((0.3 + keep) / RES) + 1          # via radius + clearance around the area
+        for j in range(max(0, j0 - grow), min(NY, j1 + grow + 1)):
+            for i in range(max(0, i0 - grow), min(NX, i1 + grow + 1)):
+                pt = pcbnew.VECTOR2I(pcbnew.FromMM(X0 + i * RES), pcbnew.FromMM(Y0 + j * RES))
+                if z.Outline().Collide(pt, pcbnew.FromMM(0.3 + keep)):
+                    for L, g in grids.items():
+                        if z.IsOnLayer(L):     # outer layers: a via's ring there is what the area forbids
+                            g[j * NX + i] = 1
     for fp in board.GetFootprints():
         for p in fp.Pads():
             if p.GetNetname() == net:

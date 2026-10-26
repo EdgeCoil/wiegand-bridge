@@ -116,6 +116,9 @@ def main():
     run("kicad-cli", "pcb", "render", "--side", "top", "--width", "1400", "--height", "1400", "--quality",
         "high", "--zoom", "0.85", "--perspective", "--rotate", "330,0,0",
         "-o", os.path.join(OUT, "render-perspective.png"), PCB)
+    # 1:1 placement check print (rev 12: was made by hand, and this function's rmtree deleted it)
+    run("kicad-cli", "pcb", "export", "pdf", "--layers", "F.Mask,F.Silkscreen,F.Courtyard,Edge.Cuts", "--mode-single",
+        "--black-and-white", "--ibt", "-o", os.path.join(OUT, "wiegand-bridge-1to1.pdf"), PCB)
     print("wrote", OUT)
 
 

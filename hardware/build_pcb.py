@@ -173,6 +173,39 @@ def labels(board):
     text(board, "wiegand.edgecoil.dev", 158.0, 149.0 + lh / 2 + 6.6, 1.2, 0, pcbnew.B_SilkS)
 
 
+def screw_keepouts(board):
+    """rev 12 (audit round 1): no tracks or vias on the outer layers under an M3 screw head (5.5 mm,
+    plus margin: 3.5 mm radius). Tented copper there could be worn through by a metal head."""
+    import math
+    for ref in ("H1", "H2", "H3", "H4"):
+        h = board.FindFootprintByReference(ref)
+        c = h.GetPosition()
+        for layer in (pcbnew.F_Cu, pcbnew.B_Cu):
+            z = pcbnew.ZONE(board)
+            z.SetIsRuleArea(True)
+            z.SetDoNotAllowCopperPour(False)
+            z.SetDoNotAllowTracks(True)
+            z.SetDoNotAllowVias(True)
+            z.SetDoNotAllowPads(False)
+            z.SetDoNotAllowFootprints(False)
+            z.SetZoneName(f"screw_{ref}")
+            z.SetLayer(layer)
+            ol = z.Outline()
+            ol.NewOutline()
+            for k in range(24):
+                a = 2 * math.pi * k / 24
+                ol.Append(int(c.x + mm(3.5) * math.cos(a)), int(c.y + mm(3.5) * math.sin(a)))
+            board.Add(z)
+
+
+def write_dru():
+    """rev 12 (audit round 1): pour held 0.4 mm off through-hole pads, so a hand-soldered pin does not
+    sit 0.25 mm from the ground pour. The zone filler and kicad-cli DRC both honour it."""
+    open(os.path.join(os.path.dirname(OUT), "wiegand-bridge.kicad_dru"), "w").write(
+        '(version 1)\n(rule "tht_pin_pour"\n  (condition "A.Type == \'Pad\' && A.Pad_Type == \'Through-hole\' && B.Type == \'Zone\'")\n'
+        '  (constraint clearance (min 0.4mm)))\n')
+
+
 def main():
     board = pcbnew.BOARD()
     board.SetCopperLayerCount(4)           # rev 10: SIG / GND plane / SIG+power / SIG
@@ -294,8 +327,10 @@ def main():
         a.SetWidth(mm(0.1))
         board.Add(a)
 
+    screw_keepouts(board)
     labels(board)
     pcbnew.SaveBoard(OUT, board)
+    write_dru()
     print("saved", OUT, len(PARTS), "footprints", len(nets), "nets")
 
 

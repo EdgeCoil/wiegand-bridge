@@ -126,6 +126,33 @@ def preroute(board):
     track(board, [v1, v2], "CC2", 0.25, pcbnew.B_Cu)
     via(board, mm(v2[0]), mm(v2[1]), cc2)
     track(board, [v2, (rx, ry)], "CC2", 0.25)
+    preroute_kelvin(board)
+
+
+def preroute_kelvin(board):
+    """rev 12: U12's sense lines, laid here because Freerouting will not enter R59's sense pads (they sit
+    inside the other net's land: net tie). Each starts on its tab outside the land, leaves sideways (+x), then turns into its pin
+    from the left end of U12's pin row. IN- (pin 9) enters between pins 10 and 8 at 0.15 mm, so pins
+    6-8 stay reachable from inside the row (under the body)."""
+    r59 = {p.GetNumber(): p for p in board.FindFootprintByReference("R59").Pads()}
+    u12 = {p.GetNumber(): p for p in board.FindFootprintByReference("U12").Pads()}
+    T = pcbnew.ToMM
+
+    def c(p):
+        return T(p.GetPosition().x), T(p.GetPosition().y)
+    land_edge = T(r59["1"].GetBoundingBox().GetRight())
+    pin_left = min(T(u12[n].GetBoundingBox().GetLeft()) for n in ("6", "7", "8", "9", "10"))
+    assert pin_left - land_edge > 0.8, ("U12 too close to R59 for the sense routes", pin_left, land_edge)
+    xn = pin_left - 0.28           # IN- vertical: 0.205 mm from pins 6-8 at 0.15 mm width
+    xp = xn + 0.1                  # IN+ vertical, below IN-'s end
+    # start on the part of each sense tab that stands out of its land, 0.2 mm + half a track clear of it
+    s3x, s3y = land_edge + 0.2 + 0.075 + 0.05, c(r59["3"])[1]
+    s4x, s4y = land_edge + 0.2 + 0.075 + 0.05, c(r59["4"])[1]
+    for n, x in (("3", s3x), ("4", s4x)):
+        assert T(r59[n].GetBoundingBox().GetRight()) > x + 0.02, ("sense tab too short", n)
+    (p10x, p10y), (p9x, p9y) = c(u12["10"]), c(u12["9"])
+    track(board, [(s3x, s3y), (xp, s3y), (xp, p10y), (p10x, p10y)], "ISNS_P", 0.15)
+    track(board, [(s4x, s4y), (xn, s4y), (xn, p9y), (p9x, p9y)], "ISNS_N", 0.15)
 
 
 def fanout_gnd(board):

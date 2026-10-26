@@ -265,8 +265,10 @@ sensor:
   - platform: wifi_signal
     name: "${friendly_name} RSSI"
     update_interval: 300s
-  # rev 12: reader monitor U12 INA226 (0x40), 0.1 ohm high-side shunt ahead of F1; its bus voltage
-  # is the reader terminal (after F1), so a tripped F1 reads as a low supply, not a missing reader.
+  # rev 12: reader monitor U12 INA226 (0x40), 0.1 ohm shunt between the boost and the shed switch;
+  # its bus voltage is the reader terminal (after F1, through 4.7k), so a tripped F1 reads as a low
+  # supply, not a missing reader. 0x40 is also the default of several Qwiic parts (HTU21D, Si7021,
+  # HDC1080, PCA9685): don't add one of those on J18 without moving it.
   - platform: ina226
     i2c_id: bus_a
     address: 0x40

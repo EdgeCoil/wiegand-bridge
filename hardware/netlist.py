@@ -92,12 +92,15 @@ FP = {
     # revision 12
     "msop10": (WB, "MSOP-10_L3.0-W3.0-P0.50-LS5.0-BL"),        # INA226AIDGSR (EasyEDA C49851)
     "soic8_thvd": (WB, "SOIC-8_L4.9-W3.9-P1.27-LS6.0-BL"),      # THVD1420DR (EasyEDA C3235215)
+    "sot23_bat54": (WB, "SOT-23-3_L2.9-W1.4-P1.90-LS2.5-BR"),   # BAT54 (EasyEDA C22466368): 1 = A, 3 = K
+    "r1206k": (WB, "R_1206_Kelvin"),                            # KiCad R_1206 + net-tied sense pads 3/4
 }
 
 # Passive part numbers (all JLCPCB Basic)
 R = {"100": "C22775", "1k": "C21190", "4.7k": "C23162", "5.1k": "C23186", "10k": "C25804",
      "15k": "C22809", "100k": "C25803", "200k": "C25811", "39k": "C23153", "47k": "C25819",
-     "8.2k": "C25981", "20k": "C4184", "120": "C22787", "390": "C23151", "68k": "C23231"}
+     "8.2k": "C25981", "20k": "C4184", "120": "C22787", "390": "C23151", "68k": "C23231",
+     "10": "C22859", "470": "C23179"}
 C = {"100p": ("c0603", "C14858"), "10n": ("c0603", "C57112"), "100n": ("c0603", "C14663"),
      "1u": ("c0603", "C15849"), "10u": ("c0603", "C19702"), "10u25": ("c0805", "C15850"),
      "22u25": ("c0805", "C45783"), "22u25_1206": ("c1206", "C12891"), "22u6": ("c0603", "C59461"),
@@ -167,7 +170,7 @@ part("L2", "ind4030", "2.2uH", "C279948", {"1": "U3_L1", "2": "U3_L2"})
 cap("C8", "10u", "VSYS")
 cap("C9", "22u25", "+3V3")
 cap("C10", "22u25", "+3V3")
-res("R3", "1k", "+3V3", "D7_A")
+res("R3", "470", "+3V3", "D7_A")   # rev 12: green Vf up to 3.1 V left 0.2-0.7 mA through 1k
 part("D7", "led_r", "green", "C2297", {"1": "D7_A", "2": "GND"})  # C2297: 1 = A
 
 # --- Block 5: MCU -------------------------------------------------------------------------------
@@ -178,7 +181,7 @@ part("U1", "esp32", "ESP32-S3-WROOM-1-N8R2", "C2913204", {
     "22": "SPI_BL_BUSY", "23": "IO21", "24": "IO47",   # IO47 = green status LED since rev 11
     "25": "IO48", "27": "IO0",
     "28": "ETH_MISO", "29": "ETH_CS", "30": "ETH_INT", "31": "RS485_DE", "32": "EXP_INT", "33": "IO40",   # IO40 = reader BEEP since rev 10 (IO7 could not be routed out)
-    "34": "I2C_SDA", "35": "I2C_SCL", "36": "RS485_RO", "37": "RS485_DI",
+    "34": "I2C_SDA", "35": "I2C_SCL", "36": "RS485_RXD", "37": "RS485_DI",
     "39": "BAT_SENSE", "40": "GND", "41": "GND"})
 # 15 IO3, 16 IO46, 26 IO45: strapping, no connect. 17 IO9 and 38 IO2: free since rev 12 (reader monitor on I2C)
 cap("C11", "22u6", "+3V3")
@@ -190,9 +193,9 @@ res("R5", "10k", "+3V3", "IO0")
 part("SW1", "tact", "BOOT", "C318884", {"1": "IO0", "4": "GND"})
 res("R8", "1k", "IO21", "D8_K")
 part("D8", "led", "red", "C84256", {"1": "D8_K", "2": "+3V3"})  # rev 11: red (was yellow C2296); C84256: 1 = -
-res("R81", "1k", "IO47", "D23_K")
+res("R81", "470", "IO47", "D23_K")   # rev 12: as R3
 part("D23", "led_r", "green", "C2297", {"1": "+3V3", "2": "D23_K"})  # rev 11: green status; C2297: 1 = A
-for i, n in enumerate(["RS485_DI", "RS485_RO", "IO40", "GND"], 1):   # TX/RX are UART0 = RS-485 now
+for i, n in enumerate(["RS485_DI", "RS485_RXD", "IO40", "GND"], 1):   # TX/RX are UART0 = RS-485 now
     part(f"TP{i}", "tp", n, None, {"1": n})
 
 # --- Block 6: Wiegand inputs --------------------------------------------------------------------
@@ -232,13 +235,13 @@ res("R19", "200k", "BOOST_OUT", "BOOST_FB")
 res("R20", "10k", "BOOST_FB", "GND")
 res("R30", "200k", "BOOST_FB", "JP1_A")
 part("JP1", "sj", "13.2V", None, {"1": "JP1_A", "2": "GND"})
-part("Q11", "sot23_ao3401", "AO3401A", "C15127", {"1": "Q11_G", "2": "BOOST_OUT", "3": "RDR_SW"})
-res("R52", "100k", "Q11_G", "BOOST_OUT")
+part("Q11", "sot23_ao3401", "AO3401A", "C15127", {"1": "Q11_G", "2": "BOOST_SNS", "3": "RDR_SW"})   # rev 12: source after the shunt
+res("R52", "100k", "Q11_G", "BOOST_SNS")
 res("R51", "100k", "Q11_G", "Q4_D")
 part("Q4", "sot23_2n7002", "2N7002", "C8545", {"1": "Q4_G", "2": "GND", "3": "Q4_D"})
 res("R17", "100", "IO48", "Q4_G")
 res("R18", "10k", "Q4_G", "+3V3")   # 10k so an S3 reset pull-down cannot win
-part("F1", "f1812", "0.5A", "C516067", {"1": "RDR_SNS", "2": "+12V_RDR"})   # rev 9 part: 24 V, 0.5 A hold
+part("F1", "f1812", "0.5A", "C516067", {"1": "RDR_SW", "2": "+12V_RDR"})   # rev 9 part: 24 V, 0.5 A hold
 part("J3", "kf128", "READER PWR", "C474952", {"1": "+12V_RDR", "2": "GND"})   # rev 12: return is plain GND
 part("J10", "kf128", "READER D0 D1", "C474952", {"1": "D0_RAW", "2": "D1_RAW"})
 part("J11", "kf128", "READER LED BEEP", "C474952", {"1": "RDR_LED", "2": "RDR_BEEP"})
@@ -297,6 +300,10 @@ for n, (q, rs, rp, c) in enumerate((("Q7", "R40", "R44", "C27"), ("Q8", "R41", "
     part(q, "sot23_2n7002", "2N7002", "C8545", {"1": "+3V3", "2": f"IN{n}", "3": f"IN{n}_D"})
     res(rp, "10k", "+3V3", f"IN{n}")
     cap(c, "10n", f"IN{n}")
+    # rev 12 (audit round 1, S4): a negative miswire forward-biases the FET's body diode and pulled the
+    # GPIO below ground (-24 V: ~22 mA). A 75 V clamp holds INx_D at about -0.9 V, so the GPIO side
+    # stays within a few hundred mV of ground; +36 V is within its 75 V reverse rating.
+    part(f"D{27 + n}", "sod123f", "1N4148W", "C81598", {"1": f"IN{n}_D", "2": "GND"})   # 1 = K
 
 # --- Block 12 (rev 10): I/O expander, TCA9535 at 0x20 ----------------------------------------------
 part("U8", "tssop24", "TCA9535", "C130204", {
@@ -340,10 +347,16 @@ part("J16", "kf128", "RELAY COM", None, {"2": "RELAY_COM"})   # then COM; pin 1 
 # rev 12: THVD1420 (full fail-safe receiver), so this node needs no bias of its own
 part("U9", "soic8_thvd", "THVD1420", "C3235215",
      {"1": "RS485_RO", "2": "RS485_DE", "3": "RS485_DE", "4": "RS485_DI", "5": "GND",
-      "6": "RS485_A", "7": "RS485_B", "8": "+3V3"})
+      "6": "U9_A", "7": "U9_B", "8": "+3V3"})
+# rev 12 (audit round 1): the SM712 clamps at up to 19 V, past the THVD1420's +-16 V bus-pin limit; TI's
+# surge reference circuit puts 10 ohm between the clamp and A/B (THVD1420 datasheet, fig. 8-5)
+res("R83", "10", "RS485_A", "U9_A")
+res("R84", "10", "RS485_B", "U9_B")
 cap("C37", "100n", "+3V3")
 res("R65", "10k", "RS485_DE", "GND")      # receive by default, and through boot (ROM prints on TXD0)
-res("R75", "10k", "RS485_RO", "+3V3")     # RO is high-Z while transmitting (/RE tied to DE)
+res("R75", "10k", "RS485_RXD", "+3V3")    # RO is high-Z while transmitting (/RE tied to DE)
+# rev 12 (audit round 1): U9 drives RO whenever it receives, so a USB-UART on TP2 for recovery fought it
+res("R85", "1k", "RS485_RO", "RS485_RXD")
 res("R68", "120", "RS485_A", "JP2_A")     # 120 ohm termination, bridge JP2 at the end of the line
 # strong fail-safe bias for one node per bus (bridge JP3+JP4 here): 240 mV idle with both ends
 # terminated (sim/rs485_term.cir). This board's own receiver no longer needs it (THVD1420, rev 12);
@@ -366,17 +379,28 @@ for ref, n in (("D17", "IN1_RAW"), ("D18", "IN2_RAW"), ("D21", "IN3_RAW"), ("D22
 part("D20", "sma_tvs", "SMAJ15A", "C19077535", {"1": "+12V_RDR", "2": "GND"})   # 1 = K
 
 # --- Block 16 (rev 12): reader monitor, INA226 on I2C (0x40) -------------------------------------
-# Requirements: reader current 0-150 mA (spec) to F1's 0.5 A hold with <= 1 mA error; the reader
-# terminal's voltage; no pin past its limit on the worst transient of its net; reader return solid.
-# 0.1 ohm: 819 mA full scale (81.92 mV), 25 uA LSB, +-10 uV max offset = +-0.1 mA.
-part("R59", "r1206", "0.1R", "C25334", {"1": "RDR_SW", "2": "RDR_SNS"})   # high side, ahead of F1
+# Requirements (guaranteed figures): reader current 0-150 mA (spec), readable to F1's 0.5 A hold,
+# within 0.2 mA + 1.5 % of reading over 25 +- 35 C; the reader terminal's voltage; every pin within
+# -0.3..40 V on the worst transient of its net; reader return solid.
+# R59: alloy 0.1 ohm, 1 %, +-50 ppm/C (Walter STE1206, C201308; audit round 1: the thick-film C25334 was
+# +-800 ppm/C, 4 mA of drift at 150 mA). 819 mA full scale, 25 uA LSB. Budget at 150 mA: INA226
+# offset 0.1 mA + gain 0.1 % + shunt 1 % + 0.18 % drift = 1.9 mA.
+# The shunt sits between the boost's output capacitors and Q11 (audit round 1, S3): IN+ and IN- are
+# on BOOST_OUT / BOOST_SNS, which the 44 uF hold up and which never go negative, even while Q11 sheds
+# the reader. (Between Q11 and F1 they followed the reader cable through F1 whenever Q11 was off.)
+# Kelvin connection by net tie (audit round 1, S2): R59's footprint carries a small sense pad inside
+# each land (pads 3/4, net_tie_pad_groups "1, 3" "2, 4"), and U12's sense pins are on nets of their
+# own (ISNS_P / ISNS_N), so no load current can share a sense track. kelvin.py checks the structure.
+part("R59", "r1206k", "0.1R", "C201308", {"1": "BOOST_OUT", "2": "BOOST_SNS", "3": "ISNS_P", "4": "ISNS_N"})
 part("U12", "msop10", "INA226", "C49851",
      {"1": "GND", "2": "GND", "4": "I2C_SDA", "5": "I2C_SCL", "6": "+3V3", "7": "GND",
-      "8": "RDR_VBUS", "9": "RDR_SNS", "10": "RDR_SW"})   # A1 = A0 = GND -> 0x40; 3 = ALERT, open
-# IN+/IN- sit on the board side of F1, held by the boost's 44 uF. VBUS reads the terminal (after F1),
-# which D20 lets swing to about -1 V: 1k keeps the pin's current under 1 mA (limit 5 mA) for a
-# 0.12 % gain error against VBUS's 830k input.
-res("R82", "1k", "+12V_RDR", "RDR_VBUS")
+      "8": "RDR_VBUS", "9": "ISNS_N", "10": "ISNS_P"})   # A1 = A0 = GND -> 0x40; 3 = ALERT, open
+# VBUS reads the reader terminal (after F1), so a tripped F1 shows as a low supply. That net is a field
+# wire: D20 lets it swing to about -0.8 V (-3.5 V at surge current), and VBUS's limit is -0.3 V. R82
+# 4.7k + D27 (BAT54, <= 0.24 V at 0.1 mA) hold the pin above -0.3 V; 4.7k against VBUS's 830k
+# input is a 0.57 % gain error (firmware calibrates it out).
+res("R82", "4.7k", "+12V_RDR", "RDR_VBUS")
+part("D27", "sot23_bat54", "BAT54", "C22466368", {"1": "GND", "3": "RDR_VBUS"})   # 1 = A, 3 = K
 cap("C39", "100n", "+3V3")                 # U12 VS
 
 # --- Block 17 (rev 10): W5500 module header and Qwiic, not fitted -------------------------------------

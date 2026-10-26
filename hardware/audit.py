@@ -152,8 +152,8 @@ print(f"   {n} near or overlapping pairs involving tall parts")
 print("\n== 2. narrowest track per current-carrying net")
 NEED = {  # amps worst case -> width needed at 1 oz, ~10 C rise, outer layer (IPC-2221 approx)
     "+VIN_RAW": 1.05, "+VIN_F": 1.05, "+VIN": 1.05, "U2_SW": 1.2, "+5V_BUCK": 1.2, "+5V": 1.2, "VBUS": 0.9,
-    "VSYS": 1.0, "BAT+": 1.0, "BAT-": 1.0, "Q6_D": 1.0, "BOOST_SW": 1.2, "BOOST_OUT": 0.35,
-    "RDR_SW": 0.35, "RDR_SNS": 0.35, "+12V_RDR": 0.35, "U3_L1": 1.0, "U3_L2": 1.0, "+3V3": 0.6,
+    "VSYS": 1.0, "BAT+": 1.0, "BAT-": 1.0, "Q6_D": 1.0, "BOOST_SW": 1.2, "BOOST_OUT": 0.5,
+    "BOOST_SNS": 0.5, "RDR_SW": 0.5, "+12V_RDR": 0.5, "U3_L1": 1.0, "U3_L2": 1.0, "+3V3": 0.6,
     "RELAY_COM": 2.0, "RELAY_NO": 2.0, "RELAY_NC": 2.0}
 
 

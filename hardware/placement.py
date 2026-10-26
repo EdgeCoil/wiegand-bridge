@@ -50,6 +50,7 @@ for n, (q, rs, rp, c) in enumerate((("Q7", "R40", "R44", "C27"), ("Q8", "R41", "
     at(q, 116.9, y, 0)
     at(rp, 120.4, y - 0.9, 0)
     at(c, 120.4, y + 0.9, 0)
+    at(f"D{28 + n}", 115.6, y + 2.6, 0)   # rev 12: INx_D reverse clamp, between the rows
 
 # --- bottom terminals: LED/BEEP, D0/D1, reader power, 12 V in -----------------------------------
 at("J11", 122.0, TERM_Y)
@@ -127,7 +128,7 @@ at("JP1", 140.6, 165.6, 0)
 at("Q11", 148.6, 165.6, 0)
 at("R52", 152.0, 165.6, 90)
 at("R51", 145.4, 165.6, 90)
-at("Q4", 144.2, 169.3, 0)      # rev 12: 0.4 mm left for R59, 0.1 mm down clear of the 13V2 legend
+at("Q4", 144.6, 169.2, 0)
 at("R17", 141.2, 169.6, 0)
 at("R18", 141.2, 171.6, 0)
 at("F1", 150.8, 170.4, 0)
@@ -195,7 +196,10 @@ at("R62", 143.1, 121.2, 0)
 at("J19", 129.5, 146.0, 90)    # expansion header, 1x12, pins run left -> right
 at("J17", 157.1, 110.1, 90)    # W5500 module header, 1x8, not usable with the OLED plugged in (rev 11: down, clear of J5's legend)
 at("J18", 160.0, 145.0, 0)      # Qwiic
-at("U9", 162.0, 178.0, 0)       # SP3485, beside J20
+at("U9", 162.0, 178.0, 0)       # THVD1420, beside J20
+at("R83", 161.5, 172.4, 90)     # rev 12: 10 ohm surge resistors between the bus and U9's A/B
+at("R84", 163.0, 172.4, 90)
+at("R85", 158.4, 176.6, 90)     # rev 12: 1k RO -> RXD0
 at("C37", 166.4, 178.0, 90)
 at("R65", 158.4, 172.8, 90)
 at("R68", 166.4, 174.6, 90)
@@ -209,10 +213,11 @@ at("D15", 131.5, 180.0, 0)      # D0/D1 at J10
 at("D16", 127.0, 180.2, 0)      # LED/BEEP at J11 (rev 11: up, clear of the terminal labels)
 at("D17", 124.6, 137.5, 90)     # IN1/IN2
 at("D18", 124.6, 143.0, 90)     # IN3/IN4
-at("R59", 147.0, 171.4, 90)     # rev 12: high-side shunt between Q11 and F1, clear of D20
-at("U12", 142.5, 179.0, 90)     # rev 12: INA226 where the LMV321 was, turned to clear the J3 legend
-at("C39", 144.9, 174.6, 90)
-at("R82", 141.4, 174.6, 90)
+at("R59", 154.2, 164.0, 90)     # rev 12: shunt between C18/C19 and Q11's source (audit round 1, S3)
+at("U12", 159.0, 164.0, 90)     # rev 12: INA226 beside the shunt, sense pins toward it (1 mm for the sense routes)
+at("C39", 158.4, 159.7, 0)      # at U12's VS end
+at("R82", 156.7, 170.2, 90)     # VBUS series 4.7k, from the F1/J3 side (clear of R75)
+at("D27", 159.0, 169.8, 0)      # VBUS clamp
 
 # --- datasheet-review additions (rev 10) -----------------------------------------------------------
 at("D21", 124.6, 148.5, 90)

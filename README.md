@@ -154,6 +154,7 @@ Everything under `hardware/` is produced by scripts, so the board can be rebuilt
 | `route.py` | Thermal vias, hand routes for the fine-pitch parts, GND fan-out, Freerouting, pours; fails on anything unconnected |
 | `freeze.py`, `routing.json` | The frozen routing (since rev 12): `save` records the finished board's tracks and vias, `replay` lays them back |
 | `padgap.py` | Pre-route: pads of different nets closer than 0.25 mm |
+| `kelvin.py` | The reader shunt's Kelvin connection (net-tied sense tabs, own sense nets) |
 | `stitch.py`, `via_fix.py`, `gndcheck.py`, `dfm_post.py`, `audit.py` | Stitching, vias out of pads, ground connectivity, paste and pours, mechanical and current audit |
 | `finish_net.py` | Routes one straggling connection by grid A* if Freerouting leaves one |
 | `schematic.py` | A readable schematic PDF from the netlist |
@@ -167,6 +168,7 @@ cd hardware
 python3 build_pcb.py                       # needs KiCad 9's pcbnew Python module
 python3 freeze.py replay                   # lay routing.json's copper back, rebuild the pours
 python3 dfm_post.py
+python3 kelvin.py                          # the shunt's sense lines are on their own copper
 python3 gndcheck.py && python3 audit.py && python3 fab.py
 kicad-cli pcb drc wiegand-bridge.kicad_pcb
 ```
@@ -182,6 +184,7 @@ python3 stitch.py && python3 stitch.py --islands
 python3 via_fix.py --apply && python3 via_fix.py   # the second run must report 0 vias inside pad openings
 python3 gndcheck.py
 python3 dfm_post.py
+python3 kelvin.py
 python3 audit.py
 python3 fab.py
 kicad-cli pcb drc wiegand-bridge.kicad_pcb
