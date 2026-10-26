@@ -37,6 +37,10 @@ def save():
             a, b = t.GetStart(), t.GetEnd()
             items.append({"net": t.GetNetname(), "layer": board.GetLayerName(t.GetLayer()),
                           "start": [a.x, a.y], "end": [b.x, b.y], "w": t.GetWidth(), "locked": lk})
+    # Freerouting leaves zero-length segments and exact duplicates; they carry nothing, so drop them
+    # (audit round 1 of rev 12 counted 12 zero-length and 2 duplicates)
+    items = [i for i in items if "via" in i or i["start"] != i["end"]]
+    items = list({json.dumps(i, sort_keys=True): i for i in items}.values())
     items.sort(key=lambda i: (i["net"], "via" in i, json.dumps(i, sort_keys=True)))
     with open(JSON, "w") as f:
         f.write("[\n" + ",\n".join(json.dumps(i, sort_keys=True) for i in items) + "\n]\n")

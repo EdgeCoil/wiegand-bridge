@@ -107,7 +107,7 @@ For the first power-up, follow the staged bench tests at the end of [`docs/desig
 
 ## LITE (in development)
 
-A 42 × 44 mm sibling for readers that already have their own supply: ESP32-S3-MINI-1, 8–16 V in,
+A 42 × 47 mm sibling for readers that already have their own supply: ESP32-S3-MINI-1, 8–16 V in,
 USB-C, one 8-way pluggable terminal, and RS-485. Its D0/D1/LED/BEEP lines all work both ways, so it
 can also pretend to be a reader towards an existing access controller.
 

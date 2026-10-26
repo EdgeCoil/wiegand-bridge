@@ -9,7 +9,7 @@ rev 11 tree was not worth refactoring for this.
 | File | What it is |
 |---|---|
 | `netlist.py` | **Source of truth**: every part, its JLCPCB part number and which net each pad joins |
-| `placement.py` | Where each part sits (board 42 × 44 mm) |
+| `placement.py` | Where each part sits (board 42 × 47 mm since rev 2) |
 | `build_pcb.py` | Makes `wiegand-bridge-lite.kicad_pcb`, unrouted, from the two files above |
 | `route.py` | Thermal vias under the module, the USB-C VBUS pad-pair hand route, GND fan-out, Freerouting, ground pours; fails on anything unconnected |
 | `freeze.py`, `routing.json` | The frozen routing: `save` records the finished board's tracks and vias, `replay` lays them back after `build_pcb.py` |
@@ -22,7 +22,7 @@ rev 11 tree was not worth refactoring for this.
 
 Differences from the full board's scripts, so a diff is not a surprise: 2 mounting holes; the
 MINI-1's nine centre GND pads take the thermal vias (no exposed pads anywhere else, so `dfm_post`
-has no paste windows); `route.py` pre-routes only the USB-C VBUS pair; `fab.py` has no rotation or body-centre
+has no paste windows); `route.py` pre-routes the USB-C VBUS pair, USB D+/D-, U2/C2's ground link and R87's stub (see docs/lite.md, Layout); `fab.py` has no rotation or body-centre
 fixes (every footprint is EasyEDA-sourced except the 0603/0805 passives, the solder jumper and the
 holes).
 
@@ -35,7 +35,7 @@ board, and a rebuild replays it, so a fix is a small edit to that file rather th
 python3 build_pcb.py                 # system python3: KiCad 9's pcbnew module
 python3 freeze.py replay             # lay routing.json's copper back, rebuild the GND pours
 python3 dfm_post.py                  # copper round D1/D3
-python3 gndcheck.py && python3 audit.py && python3 fab.py && python3 schematic.py   # (fab.py clears fab/: regenerate the 1:1 PDF below)
+python3 gndcheck.py && python3 audit.py && python3 fab.py && python3 schematic.py   # fab.py also writes the 1:1 PDF
 python3 verify.py                    # must end ALL CHECKS PASSED
 ```
 
@@ -45,16 +45,15 @@ Routing afresh, only when placement changes (the next review then covers all cop
 python3 build_pcb.py                 # system python3: KiCad 9's pcbnew module
 python3 audit.py --silk              # labels vs pads/outlines/bodies/edge: iterate before routing
 python3 padgap.py 0.25               # pads of different nets closer than 0.25 mm: MUST be 0 before routing
-ROUTE_WORK=/tmp/wbl python3 route.py 60             # 30 passes was not enough here
+ROUTE_WORK=/tmp/wbl python3 route.py 60             # 30 passes was not enough here; exits non-zero if anything is unconnected
+python3 widen.py                     # power tracks to 0.5 mm where DRC allows
 python3 stitch.py && python3 stitch.py --islands
 python3 via_fix.py --apply && python3 via_fix.py   # the second run must report 0 vias inside pad openings
 python3 gndcheck.py                  # run from this directory
 python3 dfm_post.py                  # copper round D1/D3
 python3 audit.py
-python3 fab.py                       # NOTE: clears fab/, deleting the two PDFs below -- regenerate them
+python3 fab.py                       # clears fab/ (keeping size-comparison.png) and writes the 1:1 PDF; regenerate the schematic after
 python3 schematic.py
-kicad-cli pcb export pdf --layers F.Mask,F.Silkscreen,F.Courtyard,Edge.Cuts --mode-single \
-    --black-and-white --ibt -o fab/wiegand-bridge-lite-1to1.pdf wiegand-bridge-lite.kicad_pcb
 kicad-cli pcb drc wiegand-bridge-lite.kicad_pcb
 python3 verify.py                    # everything above plus the cross-checks; must end ALL CHECKS PASSED
 python3 freeze.py save               # record the copper in routing.json

@@ -44,6 +44,19 @@ Revision 2 (2026-10-27), from the rev 1 review's open items and a passive-to-IC 
 - D26 BAT54 (C22466368, Preferred) feeds the four 10k line pull-ups (+3V3_PU) from +3V3: a reader
   powered while the board is not no longer back-feeds the dead 3.3 V rail through 1k + 10k per line.
 - C1/C2 1206 50 V (C13585): the 0805 25 V parts held 40-55 % of 10 uF at 12-16 V bias.
+
+Rev 2 audit round 1 (2026-10-27), with the board grown from 42 x 44 to 42 x 47 mm to fit them:
+- R86 1k between U3's RESET and EN: U3 discharged C13 (1 uF) with no limit, ~35 mA against its
+  5 mA absolute maximum (TPS3808 6.1). EN low is then 0.30 V (1k/11k of 3.3 V).
+- C45 10 nF on MR (28 mm of route beside other signals; the chip reacts to ~1 ns pulses).
+- C46 100 nF on +3V3_PU (59 mm of 0.2 mm track fed through the BAT54).
+- R87 100k bleed on VBUS: D3's reverse leakage charged an unplugged VBUS toward +VIN.
+- R88/R89 10 ohm between the bus (SM712, termination) and U9's A/B: the SM712 clamps above the
+  THVD1420's +-16 V (TI's surge reference circuit, THVD1420 fig. 8-5).
+- D2 is an SMAJ18CA (bidirectional, C19077539, Preferred) on +VIN_F, ahead of D1: a negative surge
+  now meets the TVS, not D1's 40 V reverse rating; a reversed 12 V supply (under the 18 V standoff)
+  is still blocked by D1.
+- R3/R81 470 ohm: green Vf up to 3.1 V left 0.3-0.7 mA through 1k.
 """
 
 STD = "/usr/share/kicad/footprints"
@@ -80,8 +93,8 @@ FP = {
 
 # Passive part numbers (all JLCPCB Basic)
 R = {"100": "C22775", "1k": "C21190", "5.1k": "C23186", "10k": "C25804", "100k": "C25803",
-     "20k": "C4184", "120": "C22787"}
-C = {"100p": ("c0603", "C14858"), "100n": ("c0603", "C14663"), "1u": ("c0603", "C15849"),
+     "20k": "C4184", "120": "C22787", "470": "C23179", "10": "C22859"}
+C = {"100p": ("c0603", "C14858"), "100n": ("c0603", "C14663"), "1u": ("c0603", "C15849"), "10n": ("c0603", "C57112"),
      "10u25": ("c0805", "C15850"), "22u25": ("c0805", "C45783"), "22u6": ("c0603", "C59461"),
      "10u50_1206": ("c1206", "C13585")}
 
@@ -107,7 +120,7 @@ part("J3", "term8", "12V GND D0 D1 LED BEEP A B", "C441177",
       "7": "RS485_A", "8": "RS485_B"})   # mating plug KF2EDGK-3.5-8P, bought separately
 part("F1", "f1812", "0.5A 24V", "C516067", {"1": "+VIN_RAW", "2": "+VIN_F"})   # rev 10's reader fuse part
 part("D1", "sma_ss34", "SS34", "C8678", {"1": "+VIN", "2": "+VIN_F"})   # series reverse-polarity; 1 = K
-part("D2", "sma_tvs", "SMAJ18A", "C19077538", {"1": "+VIN", "2": "GND"})   # 18 V standoff > 16 V max in; 1 = K. JLCPCB Preferred (no loading fee), 54k stock
+part("D2", "sma_tvs", "SMAJ18CA", "C19077539", {"1": "+VIN_F", "2": "GND"})   # rev 2: bidirectional, ahead of D1; 18 V standoff > 16 V max in; Preferred
 cap("C1", "10u50_1206", "+VIN")   # rev 2: 1206 50 V, ~9 uF at 16 V
 
 # --- Block 2: buck to 3.3 V (AP63203, datasheet figure 21) ---------------------------------------
@@ -118,7 +131,7 @@ cap("C3", "100n", "U2_BST", "U2_SW")
 part("L1", "ind5040", "4.7uH", "C305174", {"1": "U2_SW", "2": "+3V3"})   # rev 10's L3
 cap("C4", "22u25", "+3V3")
 cap("C5", "22u25", "+3V3")
-res("R3", "1k", "+3V3", "D7_A")
+res("R3", "470", "+3V3", "D7_A")
 part("D7", "led_r", "green", "C2297", {"1": "D7_A", "2": "GND"})  # PWR; C2297: 1 = A
 
 # --- Block 3: USB-C (programming, and bench power through D3) ---------------------------------------
@@ -126,6 +139,7 @@ part("J1", "usbc", "USB-C", "C2765186",
      {"A1B12": "GND", "B1A12": "GND", "A4B9": "VBUS", "B4A9": "VBUS", "A5": "CC1", "B5": "CC2",
       "A6": "USB_DP", "B6": "USB_DP", "A7": "USB_DN", "B7": "USB_DN", "13": "GND", "14": "GND"})
 cap("C6", "10u25", "VBUS")
+res("R87", "100k", "VBUS", "GND")      # rev 2: bleeds D3's reverse leakage off an unplugged VBUS
 res("R1", "5.1k", "CC1", "GND")
 res("R2", "5.1k", "CC2", "GND")
 part("D3", "sma_ss34", "SS34", "C8678", {"1": "+VIN", "2": "VBUS"})   # 4.6 V into the buck (min 3.8); off when 12 V is present
@@ -151,14 +165,16 @@ res("R4", "10k", "+3V3", "EN")    # the supervisor's open-drain RESET needs it
 cap("C13", "1u", "EN")
 # rev 2: TPS3808G30 holds EN low until +3V3 > 2.79 V, then 20 ms more (CT open). SW2 on MR.
 part("U3", "sot6br", "TPS3808G30", "C189211",
-     {"1": "EN", "2": "GND", "3": "RST_MR", "5": "+3V3", "6": "+3V3"})   # 4 = CT, open
+     {"1": "U3_RST", "2": "GND", "3": "RST_MR", "5": "+3V3", "6": "+3V3"})   # 4 = CT, open
 cap("C44", "100n", "+3V3")
+res("R86", "1k", "U3_RST", "EN")       # limits U3's discharge of C13 (5 mA abs max on RESET)
+cap("C45", "10n", "RST_MR")            # MR filter
 part("SW2", "tact", "RESET", "C318884", {"1": "RST_MR", "4": "GND"})   # MR has a 90k internal pull-up
 res("R5", "10k", "+3V3", "IO0")
 part("SW1", "tact", "BOOT", "C318884", {"1": "IO0", "4": "GND"})
 res("R8", "1k", "IO21", "D8_K")
 part("D8", "led", "red", "C84256", {"1": "D8_K", "2": "+3V3"})  # FAULT (ESPHome status LED); C84256: 1 = -
-res("R81", "1k", "IO47", "D23_K")
+res("R81", "470", "IO47", "D23_K")
 part("D23", "led_r", "green", "C2297", {"1": "+3V3", "2": "D23_K"})  # OK (API connected); C2297: 1 = A
 
 # --- Block 5: reader lines D0, D1, LED, BEEP -- bidirectional cells ---------------------------------
@@ -184,12 +200,15 @@ for raw, node, tx, rs, z, c, rp, q, rg, rgd in CELLS:
     part(q, "sot23_2n7002", "AO3400A", "C20917", {"1": gate, "2": "GND", "3": raw})   # rev 2: on at 3.3 V
 # rev 2: the pull-ups' supply, so a powered reader cannot back-feed a dead +3V3 through them
 part("D26", "sot23_bat54", "BAT54", "C22466368", {"1": "+3V3", "3": "+3V3_PU"})
+cap("C46", "100n", "+3V3_PU")
 
 # --- Block 6: RS-485 / OSDP on UART0 (rev 10 block 14, less the bias network) ----------------------
 # rev 2: THVD1420, full fail-safe receiver, so no bias resistors are needed on this node
 part("U9", "soic8_thvd", "THVD1420", "C3235215",
      {"1": "RS485_RO", "2": "RS485_DE", "3": "RS485_DE", "4": "RS485_DI", "5": "GND",
-      "6": "RS485_A", "7": "RS485_B", "8": "+3V3"})
+      "6": "U9_A", "7": "U9_B", "8": "+3V3"})
+part("R88", "r0603", "10", "C844519", {"1": "RS485_A", "2": "U9_A"})   # rev 2: surge resistors between the SM712 and the
+part("R89", "r0603", "10", "C844519", {"1": "RS485_B", "2": "U9_B"})   # transceiver; pulse-proof Vishay CRCW...HP (TI's BOM)
 cap("C37", "100n", "+3V3")
 res("R65", "10k", "RS485_DE", "GND")      # receive by default, and through boot (ROM prints on TXD0)
 res("R75", "10k", "RS485_RO", "+3V3")     # RO is high-Z while transmitting (/RE tied to DE)

@@ -90,6 +90,76 @@ def preroute_usb(board):
         via(board, mm(px - 1.12), mm(py), vbus)
         pts.append((px - 1.12, py))
     track(board, pts, "VBUS", 0.5, pcbnew.B_Cu)
+    preroute_usb_data(board)
+    buck_ground(board)
+    # rev 2: R87 (VBUS bleed) sits just above D3's VBUS pad; join them here, as Freerouting left R87
+    # open in eight of eight attempts once the J1 shell keep-out was in
+    r87 = {p.GetNumber(): p.GetPosition() for p in board.FindFootprintByReference("R87").Pads()}
+    d3 = {p.GetNumber(): p.GetPosition() for p in board.FindFootprintByReference("D3").Pads()}
+    track(board, [(pcbnew.ToMM(r87["1"].x), pcbnew.ToMM(r87["1"].y)),
+                  (pcbnew.ToMM(d3["2"].x), pcbnew.ToMM(d3["2"].y))], "VBUS", 0.4)
+
+
+def buck_ground(board):
+    """rev 2 (audit round 1, S3): the AP63203's input loop closed through single vias and the In1 plane.
+    Join U2's GND pin to C2's GND pad on F.Cu and give the pair two more vias, in the free strip between
+    L1's switch pad, U2 and C2 (the datasheet asks for input capacitors close and well-viaed)."""
+    gnd = board.FindNet("GND")
+    u2 = {p.GetNumber(): p.GetPosition() for p in board.FindFootprintByReference("U2").Pads()}
+    c2 = {p.GetNumber(): p.GetPosition() for p in board.FindFootprintByReference("C2").Pads()}
+    T = pcbnew.ToMM
+    px, py = T(u2["4"].x), T(u2["4"].y)
+    cx, cy = T(c2["2"].x), T(c2["2"].y)
+    track(board, [(px, py), (px + 2.25, py)], "GND", 0.4)
+    track(board, [(cx, py), (cx, cy)], "GND", 0.4)
+    for dx in (1.15, 2.25):
+        via(board, mm(px + dx), mm(py), gnd)
+
+
+# rev 2: USB D+/D- as laid by the rev 2 route that passed review (41b4b54). The corridor between C6 and
+# J1's pad row holds a GND via and a VBUS via, so each line escapes on In2 through a via; Freerouting
+# found that for D+ but left D- open in five of five attempts after rev 2's audit additions. Absolute
+# coordinates: U1, J1, C6, R1 and R2 have not moved since. (net, layer or "via", start, end, width)
+USB_DATA = (
+    ("USB_DN", "F.Cu", (131.559, 116.082), (131.342, 116.299), 0.20),
+    ("USB_DN", "In2.Cu", (131.342, 117.000), (131.342, 116.299), 0.20),
+    ("USB_DN", "In2.Cu", (136.092, 121.750), (131.342, 117.000), 0.20),
+    ("USB_DN", "F.Cu", (132.900, 116.082), (131.559, 116.082), 0.20),
+    ("USB_DN", "F.Cu", (132.900, 115.430), (132.900, 116.082), 0.20),
+    ("USB_DN", "F.Cu", (134.218, 121.649), (134.218, 120.750), 0.20),
+    ("USB_DN", "F.Cu", (135.020, 120.750), (134.218, 120.750), 0.20),
+    ("USB_DN", "F.Cu", (134.220, 121.650), (134.218, 121.649), 0.20),
+    ("USB_DN", "F.Cu", (134.220, 121.650), (134.243, 121.674), 0.15),
+    ("USB_DN", "F.Cu", (134.243, 121.674), (134.243, 121.750), 0.15),
+    ("USB_DN", "F.Cu", (135.020, 121.750), (134.243, 121.750), 0.15),
+    ("USB_DN", "F.Cu", (136.092, 121.750), (135.020, 121.750), 0.20),
+    ("USB_DN", "via", (131.342, 116.299), None, 0.6),
+    ("USB_DN", "via", (136.092, 121.750), None, 0.6),
+    ("USB_DP", "In2.Cu", (134.134, 114.570), (133.089, 115.616), 0.20),
+    ("USB_DP", "In2.Cu", (133.089, 115.616), (133.089, 117.311), 0.20),
+    ("USB_DP", "F.Cu", (133.750, 115.430), (133.750, 114.778), 0.20),
+    ("USB_DP", "In2.Cu", (133.089, 117.311), (133.775, 117.998), 0.20),
+    ("USB_DP", "F.Cu", (133.750, 114.778), (133.926, 114.778), 0.20),
+    ("USB_DP", "F.Cu", (133.926, 114.778), (134.134, 114.570), 0.20),
+    ("USB_DP", "In2.Cu", (133.775, 117.998), (134.149, 117.998), 0.20),
+    ("USB_DP", "F.Cu", (135.020, 120.250), (135.721, 120.250), 0.15),
+    ("USB_DP", "F.Cu", (135.721, 120.250), (135.797, 120.250), 0.20),
+    ("USB_DP", "F.Cu", (135.797, 121.250), (135.797, 120.250), 0.15),
+    ("USB_DP", "F.Cu", (135.020, 121.250), (135.797, 121.250), 0.20),
+    ("USB_DP", "F.Cu", (136.027, 120.020), (136.027, 119.876), 0.20),
+    ("USB_DP", "In2.Cu", (134.149, 117.998), (136.027, 119.876), 0.20),
+    ("USB_DP", "F.Cu", (135.797, 120.250), (136.027, 120.020), 0.20),
+    ("USB_DP", "via", (134.134, 114.570), None, 0.6),
+    ("USB_DP", "via", (136.027, 119.876), None, 0.6),
+)
+
+
+def preroute_usb_data(board):
+    for net, layer, a, b, w in USB_DATA:
+        if layer == "via":
+            via(board, mm(a[0]), mm(a[1]), board.FindNet(net), d=w)
+        else:
+            track(board, [a, b], net, w, board.GetLayerID(layer))
 
 
 def fanout_gnd(board):

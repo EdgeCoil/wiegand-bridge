@@ -129,7 +129,7 @@ def labels(board):
     text(board, "USB", pcbnew.ToMM(f.x) - 0.5, pcbnew.ToMM(f.y), 1.0, 90, pcbnew.B_SilkS)
     lh = logo(board, 120.0, 111.5, 18.0)
     text(board, "WIEGAND BRIDGE LITE", 120.0, 111.5 + lh / 2 + 2.0, 1.2, 0, pcbnew.B_SilkS)
-    text(board, "rev 1  2026-10", 120.0, 111.5 + lh / 2 + 4.3, 1.0, 0, pcbnew.B_SilkS)
+    text(board, "rev 2  2026-10", 120.0, 111.5 + lh / 2 + 4.3, 1.0, 0, pcbnew.B_SilkS)
     text(board, "wiegand.edgecoil.dev", 120.0, 111.5 + lh / 2 + 6.6, 1.2, 0, pcbnew.B_SilkS)
     for num, name in enumerate(TERMINAL, 1):      # the legend again on the back, under each pin
         px, py = pad_xy(board, "J3", str(num))
@@ -249,6 +249,7 @@ def main():
 
     labels(board)
     antenna_keepout(board)
+    j1_shell_keepout(board)
     pcbnew.SaveBoard(OUT, board)
     print("saved", OUT, len(PARTS), "footprints", len(nets), "nets")
 
@@ -260,6 +261,29 @@ def main():
 # pads (their tops are at y = 100.97), the module's full width plus 1 mm each side. Found missing
 # in the 2026-10-21 audit -- the plan called for it and the ground pours ran to the edge.
 ANTENNA_KEEPOUT_DEPTH = 0.95     # mm below the top edge; pads 46-60 start at 0.97
+
+
+def j1_shell_keepout(board):
+    """rev 2 (audit round 1): no F.Cu track under the USB-C's metal shell, beyond its pad row and the D+/D-
+    vias; RS485_RO ran 9.5 mm there with only mask between it and the shell. Vias (GND stitching) stay
+    allowed; verify.py 11b checks that no foreign net's track is under J1 at all."""
+    j1 = board.FindFootprintByReference("J1")
+    sig = [p for p in j1.Pads() if p.GetNetname() in ("USB_DP", "USB_DN", "CC1", "CC2")]
+    x1 = pcbnew.ToMM(max(p.GetBoundingBox().GetRight() for p in sig)) + 0.93
+    bb = j1.GetBoundingBox(False, False)
+    x2, y1, y2 = BOARD[0] + BOARD[2], pcbnew.ToMM(bb.GetTop()), pcbnew.ToMM(bb.GetBottom())
+    z = pcbnew.ZONE(board)
+    z.SetIsRuleArea(True)
+    z.SetDoNotAllowCopperPour(False)
+    z.SetDoNotAllowTracks(True)
+    z.SetDoNotAllowVias(False)
+    z.SetDoNotAllowPads(False)
+    z.SetDoNotAllowFootprints(False)
+    z.SetZoneName("j1_shell")
+    z.SetLayer(pcbnew.F_Cu)
+    for x, y in ((x1, y1), (x2, y1), (x2, y2), (x1, y2)):
+        z.AppendCorner(pcbnew.VECTOR2I(mm(x), mm(y)), -1)
+    board.Add(z)
 
 
 def antenna_keepout(board):

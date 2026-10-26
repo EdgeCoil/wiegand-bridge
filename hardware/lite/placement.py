@@ -2,7 +2,8 @@
 # SPDX-License-Identifier: CERN-OHL-S-2.0
 """Placement for build_pcb.py: ref -> (x mm, y mm, rotation deg, side).
 
-Board 42 x 44 mm at (100, 100) -- lite rev 1 (the full board is 90 x 95). Top right: the ESP32-S3-MINI-1
+Board 42 x 47 mm at (100, 100) -- lite rev 2 (42 x 44 in rev 1; the extra 3 mm is a band at
+y 128.5-131.5 for rev 2's audit additions, everything below it moved down 3 mm) -- lite rev 1 was (the full board is 90 x 95). Top right: the ESP32-S3-MINI-1
 with its antenna over the top edge (its EN / UART / IO38 column faces the right edge, the IO0-IO11
 column faces inboard). Right edge below it: USB-C. Top left: M3 hole, the 3.3 V buck under it, then
 the BOOT / RESET switches and the status LEDs. Left edge: the 12 V input chain, top to bottom.
@@ -14,9 +15,10 @@ above the body (silkscreen text is 1.0 mm high, JLCPCB's minimum).
 Spacing is set from the courtyards KiCad draws (0603: 3.0 x 1.5 mm, 0805: 3.45 x 2.0, SOT-23:
 2.95 x 1.35, SOD-123: 2.85 x 1.65): vertical 0603s on a 3.0 mm pitch, side by side at 2.4 mm.
 """
-BOARD = (100.0, 100.0, 42.0, 44.0)
+BOARD = (100.0, 100.0, 42.0, 47.0)
+DY = 3.0                         # rev 2: the band below the line cells
 HOLES = []
-TERM_Y = 136.2
+TERM_Y = 136.2 + 3.0
 
 P = {}
 
@@ -49,7 +51,7 @@ at("J1", 137.4, 121.0, 90)
 at("C6", 132.4, 118.0, 90)      # the VBUS pad-pair vias (route.py) sit at x 133.9
 at("R1", 132.4, 121.3, 90)
 at("R2", 132.4, 124.3, 90)
-at("D3", 140.3, 134.3, 90)      # VBUS -> +VIN
+at("D3", 140.3, 134.3 + DY, 90)      # VBUS -> +VIN
 
 # --- buck (top left, under the hole's keep-out), then the 12 V input chain down the left edge --------
 at("L1", 104.6, 110.5, 0)
@@ -61,7 +63,7 @@ at("C2", 106.9, 117.45, 90)     # input cap beside pin 3 (rev 2: 1206, down clea
 at("C1", 103.6, 118.6, 0)       # rev 2: 1206, laid across the column to fit between U2 and D1
 at("D2", 107.2, 123.3, 90)      # TVS in its own column: the SMA pads run 3 mm past the courtyard
 at("D1", 103.5, 124.5, 90)
-at("F1", 103.6, 130.2, 0)
+at("F1", 103.6, 130.2 + DY, 0)
 
 # --- reader lines: one column per terminal pin (D0, D1, LED, BEEP), buffers above -------------------
 at("U4", 114.6, 114.8, 0)       # pads clear of Q3's (the SOT-23 pads run 0.5 mm past its courtyard)       # D0 / D1 buffer
@@ -80,24 +82,31 @@ for cx, (q, rg, rgd, rs, z, c, rp) in zip((111.6, 117.5, 123.4, 129.3),
     at(rs, cx, 124.95, 0)
     at(c, cx - 1.2, 127.25, 90)
     at(rp, cx + 1.2, 127.25, 90)
-at("D15", 111.65, 130.3, 0)     # D0/D1 surge, between pins 3-4 (upright: pads 1-2 stacked at the right)
-at("D16", 118.65, 130.3, 0)     # LED/BEEP, between pins 5-6
-at("D19", 125.65, 130.3, 0)     # A/B, between pins 7-8
+at("D15", 111.65, 130.3 + DY, 0)     # D0/D1 surge, between pins 3-4 (upright: pads 1-2 stacked at the right)
+at("D16", 118.65, 130.3 + DY, 0)     # LED/BEEP, between pins 5-6
+at("D19", 125.65, 130.3 + DY, 0)     # A/B, between pins 7-8
 
 # --- RS-485 (bottom right) --------------------------------------------------------------------------
-at("U9", 134.5, 131.9, 180)     # A/B pads toward the terminal
+at("U9", 134.5, 131.9 + DY, 180)     # A/B pads toward the terminal
 at("R65", 134.0, 127.0, 0)
 at("R75", 137.2, 127.0, 0)
 at("C37", 140.2, 127.0, 0)
 at("D26", 139.0, 129.4, 0)      # rev 2: BAT54 feeding the line pull-ups, where the bias pair was
-at("U3", 130.0, 132.5, 90)      # rev 2: reset supervisor, between D19 and U9 (the LED labels fill the
-at("C44", 129.8, 129.6, 0)      # column beside EN); EN and RST_MR are slow signals, routed in from here
-at("R68", 133.6, 137.3, 0)
-at("JP2", 131.0, 140.0, 0, "B")   # hand-bridged: on the back, under the terminal
+# --- rev 2 audit round 1: the new band (y 128.5-131.5) ---------------------------------------------
+at("C46", 136.4, 129.6, 90)     # +3V3_PU decoupling, beside D26
+at("R87", 140.3, 132.4, 90)     # VBUS bleed, its VBUS pad (1, lower) just above D3's VBUS pad
+at("R88", 133.0, 129.9, 90)     # RS-485 surge resistors, above U9
+at("R89", 134.5, 129.9, 90)
+at("R86", 128.0, 130.0, 90)     # EN series, above U3
+at("C45", 126.4, 130.0, 90)     # MR filter
+at("U3", 130.0, 132.5 + DY, 90)      # rev 2: reset supervisor, between D19 and U9 (the LED labels fill the
+at("C44", 129.8, 129.6 + DY, 0)      # column beside EN); EN and RST_MR are slow signals, routed in from here
+at("R68", 133.6, 137.3 + DY, 0)
+at("JP2", 131.0, 140.0 + DY, 0, "B")   # hand-bridged: on the back, under the terminal
 
 # --- terminal, holes ---------------------------------------------------------------------------------
 at("J3", 115.15, TERM_Y, 0)
 at("H1", 103.5, 103.5)
-at("H2", 138.5, 140.5)
+at("H2", 138.5, 140.5 + DY)
 
 PLACE = P

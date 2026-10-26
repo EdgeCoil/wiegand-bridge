@@ -57,7 +57,7 @@ U1_OPEN = {"5", "6", "7", "16", "17", "18", "19", "20", "21", "22", "26", "28", 
            "35", "36", "37", "38", "41", "44"}
 # JLCPCB part numbers that pay the US$3 loading fee (Extended and not Preferred), as costed in the guide.
 FEE_BEARING = {"C3013941", "C780769", "C10429", "C2765186", "C305174", "C516067", "C441177",
-               "C3235215", "C189211"}   # rev 2: THVD1420, TPS3808G30
+               "C3235215", "C189211", "C844519"}   # rev 2: THVD1420, TPS3808G30, pulse-proof 10 ohm
 ACCEPTED_DRC = {"hole_clearance", "courtyards_overlap", "silk_edge_clearance", "silk_over_copper", "silk_overlap"}
 fails = []
 
@@ -231,7 +231,7 @@ for pin in ("3", "4", "5", "6"):
 
 # --- 7. polarity ----------------------------------------------------------------------------------
 section(7, "diode / LED pin names from each symbol, with the net on each")
-WANT = {"D1": ("K", "+VIN"), "D3": ("K", "+VIN"), "D2": ("K", "+VIN"), "D7": ("K", "GND"), "D8": ("+", "+3V3"),
+WANT = {"D1": ("K", "+VIN"), "D3": ("K", "+VIN"), "D7": ("K", "GND"), "D8": ("+", "+3V3"),   # D2: bidirectional since rev 2
         "D23": ("A", "+3V3"), "D5": ("K", "D0_IN"), "D6": ("K", "D1_IN"), "D24": ("K", "LED_IN"), "D25": ("K", "BEEP_IN"),
         "D15": ("K", "GND"), "D16": ("K", "GND"), "D19": ("K", "GND"), "D26": ("A", "+3V3")}
 for ref, fp, val, lcsc, pads in PARTS:
@@ -340,6 +340,17 @@ else:
     print(f"   copper in the strip: {copper or 'none'}")
     if copper:
         fail(f"copper under the antenna strip: {copper}")
+
+# --- 11b. nothing foreign under J1's shell (rev 2 audit round 1: RS485_RO ran 9.5 mm there on F.Cu) ---
+section("11b", "J1 shell: no F.Cu track of another part's net under the USB-C body")
+j1 = board.FindFootprintByReference("J1")
+j1_nets = {p.GetNetname() for p in j1.Pads()}
+cy_box = j1.GetCourtyard(pcbnew.F_CrtYd).BBox() if j1.GetCourtyard(pcbnew.F_CrtYd).OutlineCount() else j1.GetBoundingBox(False, False)
+under = sorted({t.GetNetname() for t in board.GetTracks() if t.GetClass() != "PCB_VIA" and t.GetLayer() == pcbnew.F_Cu
+                and t.GetNetname() not in j1_nets and (cy_box.Contains(t.GetStart()) or cy_box.Contains(t.GetEnd()))})
+print(f"   foreign F.Cu nets under J1: {under or 'none'}")
+if under:
+    fail(f"F.Cu tracks of {under} run under J1's shell")
 
 # --- 12. JLCPCB library ---------------------------------------------------------------------------
 if "--offline" not in sys.argv:
