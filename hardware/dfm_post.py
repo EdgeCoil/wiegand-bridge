@@ -73,9 +73,13 @@ def paste(board):
 
 
 def pours(board):
-    for ref, extra in DIODE_POUR.items():
+    # Each pour gets its own priority, in (ref, pad) order: a diode's two pours overlap between its
+    # pads, and at equal priority KiCad fills them in file order, which follows UUIDs and changed from
+    # one run to the next (2026-10-27: the same copper gave D1's pours 28.5 / 14.9 mm2 and 19.7 / 19.9).
+    prio = 5                                  # above the GND pour
+    for ref, extra in sorted(DIODE_POUR.items()):
         fp = board.FindFootprintByReference(ref)
-        for p in fp.Pads():
+        for p in sorted(fp.Pads(), key=lambda q: q.GetNumber()):
             if p.GetNetname() == "GND":
                 continue
             bb = p.GetBoundingBox()
@@ -83,7 +87,8 @@ def pours(board):
             z = pcbnew.ZONE(board)
             z.SetLayer(pcbnew.F_Cu)
             z.SetNet(p.GetNet())
-            z.SetAssignedPriority(5)          # above the GND pour
+            z.SetAssignedPriority(prio)
+            prio += 1
             z.SetLocalClearance(mm(0.25))
             z.SetMinThickness(mm(0.25))
             z.SetPadConnection(pcbnew.ZONE_CONNECTION_FULL)

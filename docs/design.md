@@ -1,10 +1,20 @@
-# Design notes — revision 11
+# Design notes — revision 12
 
 How the board works, why, and how to test it. `hardware/netlist.py` is the authority on what
 connects to what; this document explains it.
 
-**Revision 11** (the files in this repository, not yet ordered) differs from **revision 10** (built
-and tested; tag `rev-10b`) in three ways:
+**Revision 12** (the files in this repository, not yet ordered) is revision 11 (also never ordered)
+with two blocks redrawn around integrated parts, from a passive-to-IC audit:
+- **Reader monitor:** U12, an INA226 on I²C (0x40), with a 0.1 Ω **high-side** shunt between the
+  shed switch and F1. It replaces the 0.2 Ω low-side shunt with an LMV321 (×21) on IO9 and the
+  R31/R32 rail divider on IO2. The LMV321's offset is specified in millivolts against a 30 mV full
+  scale, 5 mA of error per millivolt; the INA226 guarantees ±10 µV, ±0.1 mA here. The reader's
+  return is now plain ground (the shunt no longer lifts it), and IO2 and IO9 are free.
+- **RS-485:** U9 is a THVD1420, whose receiver has full fail-safe: an idle, open or shorted bus reads
+  as a 1, so this node needs no bias of its own. The 20k weak-bias pair is gone; the 390 Ω JP3/JP4
+  strong bias stays, for buses whose other nodes need it.
+
+**Revision 11** differs from **revision 10** (built and tested; tag `rev-10b`) in three ways:
 - **Status pair:** D8 becomes red `FAULT` (IO21, ESPHome's status LED: a slow blink is a warning, a
   fast blink an error), and a new D23 green `OK` (IO47 through R81 1 kΩ) is lit while Home Assistant
   is connected. They sit left of the OLED, so a fitted screen doesn't hide them.
@@ -57,8 +67,8 @@ Keep the logger at `INFO` in service. At `DEBUG`, ESPHome logs the Wiegand frame
                                        +5V ─► U5 CN3058E charger ─► LiFePO4 cell ─► Q5 ──────────────┤
                                                                                                       │
                                                    U6 MT3608 boost, 12.6 V (13.2 V with JP1) ◄────────┘
-                                                        └─► Q11 shed switch ─► F1 PTC ─► J3 reader +12V
-                                                                               (return via 0.2 Ω shunt → LMV321 → IO9)
+                                                        └─► Q11 shed switch ─► 0.1 Ω ─► F1 PTC ─► J3 reader +12V
+                                                                      (U12 INA226 reads the shunt and the J3 voltage, I²C)
 
  ESP32-S3-WROOM-1-N8R2
    Wiegand D0/D1 ◄─ U4 74LVC2G17 ◄─ 1k + 5.1 V zener + 100 pF ◄─ SM712 ◄─ J10
@@ -66,7 +76,7 @@ Keep the logger at `INFO` in service. At `DEBUG`, ESPHome logs the Wiegand frame
    I²C (IO41/42) ─► OLED J5, Qwiic J18, TCA9535 expander U8 (0x20)
    SPI (IO10–14, RST expander P06) ─► J6 (TFT / e-paper); W5500 header J17 shares SCK/MOSI
    IN1–IN4 (IO15–18) ◄─ 2N7002 isolation ◄─ SMF36CA ◄─ J9/J12/J13
-   RS-485 (UART0, DE IO38) ─► SP3485 ─► SM712 ─► J20
+   RS-485 (UART0, DE IO38) ─► THVD1420 ─► SM712 ─► J20
 ```
 
 **Power sources and what each one runs:**
@@ -89,8 +99,10 @@ Keep the logger at `INFO` in service. At `DEBUG`, ESPHome logs the Wiegand frame
 - **U3 TPS63001** buck-boost makes `+3V3` from `VSYS` (1.8–5.5 V in), so the ESP32 stays up across the
   whole cell range.
 - **The reader's supply is always regulated.** U6 (MT3608) boosts `VSYS` to 12.6 V, or 13.2 V with
-  JP1 bridged, whichever source is present. IO2 reads the rail (÷7.67), and the 0.2 Ω shunt plus
-  LMV321 (gain 21) report reader current on IO9. **Specify the reader at ≤ 150 mA at 12 V**: U6
+  JP1 bridged, whichever source is present. U12 (INA226, I²C 0x40) reads the reader current through
+  a 0.1 Ω shunt ahead of F1, and the voltage at the reader terminal itself (after F1, through R82
+  1 kΩ), so a tripped F1 shows as a low supply rather than a missing reader. **Specify the reader at
+  ≤ 150 mA at 12 V**: U6
   could supply more, but the battery path, the DW01A over-current trip and F1's hot-enclosure
   derating all assume ≤ 150 mA.
 - **Reader shedding:** Q11, a high-side P-FET after U6, driven by Q4 from IO48. R18 (10 k to `+3V3`)
@@ -130,7 +142,8 @@ J8 takes an enclosure-mounted switch in parallel instead.
 **Inputs IN1–IN4:** dry contacts to GND. Each has an SMF36CA clamp, 1 kΩ series and a 2N7002 with its
 gate at `+3V3` as an isolator: a 12 or 24 V miswire reads "off" and damages nothing.
 
-**RS-485:** SP3485 on UART0 (TX/RX), DE/RE on IO38. Bridge **JP2** (120 Ω termination) and
+**RS-485:** THVD1420 on UART0 (TX/RX), DE/RE on IO38. Its receiver is fully fail-safe, so this board
+reads an idle bus correctly whatever the bias. Bridge **JP2** (120 Ω termination) and
 **JP3 + JP4** (fail-safe bias) only on the board at the end of the bus. J21 carries reader power and
 ground for an OSDP reader. ESPHome has no OSDP component yet; the UART is declared so the port can
 be tested.
@@ -140,13 +153,13 @@ be tested.
 | GPIO | Function | Note |
 |---|---|---|
 | IO1 | Battery voltage | ADC, ÷2 |
-| IO2 | Reader rail voltage | ADC, ÷7.67 |
+| IO2 | — | free since rev 12 (the reader monitor is on I²C) |
 | IO3 | Battery thermistor | ADC; strapping pin, harmless unless JTAG eFuses are burnt |
 | IO4 / IO5 | Wiegand D0 / D1 | via U4 |
 | IO6 | Reader LED | Q1 |
 | IO40 | Reader BEEP | Q2 |
 | IO8 | Tamper | low = lid on |
-| IO9 | Reader current | LMV321 output, 4.2 mV per mA |
+| IO9 | — | free since rev 12 |
 | IO10 / 11 / 12 / 13 | SPI CS / MOSI / SCK / DC | J6 |
 | IO14 | TFT backlight **or** e-paper BUSY | J6 |
 | IO15–IO18 | IN1–IN4 | via Q7–Q10 |
@@ -220,7 +233,7 @@ silkscreen before a cell is ever connected.
 - Sweep 6 → 36 V: the rails hold.
 - USB alone → boots and flashes. USB and 12 V together → no back-feed into VBUS.
 
-**2. Expander:** an I²C scan shows `0x20` (and `0x3C` with the OLED). Remove 12 V with USB still in:
+**2. Expander and reader monitor:** an I²C scan shows `0x20` and `0x40` (and `0x3C` with the OLED). Remove 12 V with USB still in:
 5 V power-good → off, external power stays on.
 
 **3. Battery** (meter the polarity first)

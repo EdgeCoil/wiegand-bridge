@@ -74,23 +74,36 @@ def obstacles(board, net):
                 # 0.5 mm copper-to-edge rule through grid rounding (0.6 let a via in at 0.466, rev 2)
                 if i * RES < 0.7 or j * RES < 0.7 or (NX - 1 - i) * RES < 0.7 or (NY - 1 - j) * RES < 0.7:
                     g[j * NX + i] = 1
+    # each obstacle keeps its own net class's clearance where that is larger than CLR (Relay 0.5 mm):
+    # with CLR for everything, a stitching via landed 0.34 mm from a RELAY_NO track (rev 12)
+    ns = board.GetDesignSettings().m_NetSettings
+
+    def keep_for(item):
+        try:
+            c = ToMM(ns.GetNetClassByName(item.GetNetClassName()).GetClearance())
+        except Exception:
+            c = CLR
+        return keep + max(0.0, c - CLR)
+
     for t in board.GetTracks():
         if t.GetNetname() == net:
             continue
+        k = keep_for(t)
         if t.GetClass() == "PCB_VIA":
             p = t.GetPosition()
             for g in grids.values():
-                mark_disk(g, ToMM(p.x), ToMM(p.y), ToMM(t.GetWidth(pcbnew.F_Cu)) / 2 + keep)
+                mark_disk(g, ToMM(p.x), ToMM(p.y), ToMM(t.GetWidth(pcbnew.F_Cu)) / 2 + k)
         elif t.GetLayer() in grids:
             s, e = t.GetStart(), t.GetEnd()
-            mark_seg(grids[t.GetLayer()], ToMM(s.x), ToMM(s.y), ToMM(e.x), ToMM(e.y), ToMM(t.GetWidth()) / 2 + keep)
+            mark_seg(grids[t.GetLayer()], ToMM(s.x), ToMM(s.y), ToMM(e.x), ToMM(e.y), ToMM(t.GetWidth()) / 2 + k)
     for fp in board.GetFootprints():
         for p in fp.Pads():
             if p.GetNetname() == net:
                 continue
+            k = keep_for(p)
             for layer, g in grids.items():
                 if p.IsOnLayer(layer) or p.GetDrillSize().x > 0:
-                    mark_box(g, p.GetBoundingBox(), keep)
+                    mark_box(g, p.GetBoundingBox(), k)
     return grids
 
 

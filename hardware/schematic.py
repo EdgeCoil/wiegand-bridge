@@ -20,7 +20,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 NSV = os.path.expanduser("~/.local/share/netlistsvg/node_modules/netlistsvg")
 WORK = os.path.join(HERE, "fab", "schematic")
 POWER = {"GND", "+3V3", "+5V", "+5V_BUCK", "VSYS", "+VIN", "+VIN_F", "+VIN_RAW", "VBUS", "BAT+", "BAT-",
-         "+12V_RDR", "BOOST_OUT", "RDR_GND"}
+         "+12V_RDR", "BOOST_OUT"}
 
 # --- 1. parts per block, by instrumenting netlist.py's part() ------------------------------------
 src = open(os.path.join(HERE, "netlist.py")).read()

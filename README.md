@@ -8,9 +8,10 @@ or just log who came in.
 
 ![The board](hardware/fab/render-top.png)
 
-> **Status: revision 10 is built, tested and working.** The files here are **revision 11**, which
-> is routed and checked but not yet ordered: it adds a red/green status LED pair and cleans up the
-> silkscreen (see [`docs/design.md`](docs/design.md)). The tested design is tag
+> **Status: revision 10 is built, tested and working.** The files here are **revision 12**, which
+> is routed and checked but not yet ordered: it adds a red/green status LED pair, cleans up the
+> silkscreen, and moves the reader monitor and the RS-485 transceiver to integrated parts (see
+> [`docs/design.md`](docs/design.md)). The tested design is tag
 > [`rev-10b`](https://github.com/EdgeCoil/wiegand-bridge/tree/rev-10b).
 
 ## Why it only reports
@@ -81,12 +82,12 @@ For the first power-up, follow the staged bench tests at the end of [`docs/desig
 **Reader**
 - Wiegand D0/D1 through a 5 V-tolerant Schmitt buffer, clamped against 12 V miswiring
 - Open-drain LED and BEEP outputs back to the reader
-- RS-485 port (SP3485) for OSDP readers, with jumper-selectable termination and bias
+- RS-485 port (THVD1420, fail-safe receiver) for OSDP readers, with jumper-selectable termination and bias
 
 **Power**
 - 6–36 V input, reverse-polarity and surge protected
 - Regulated reader supply from every power source: 12.6 V (13.2 V by solder jumper), with current
-  sensing, voltage monitoring and firmware-controlled shedding
+  and voltage monitoring (INA226) and firmware-controlled shedding
 - LiFePO4 backup: on-board charger (CN3058E, 3.6 V), cell protection (DW01A + FS8205A),
   thermistor-gated charging, seamless handover when external power drops
 
@@ -135,8 +136,8 @@ can also pretend to be a reader towards an existing access controller.
 1. Upload `hardware/fab/wiegand-bridge-gerbers.zip` to JLCPCB and choose **4 layers**.
 2. Turn on **PCB Assembly**, top side, and upload `wiegand-bridge-bom.csv` and `wiegand-bridge-cpl.csv`.
 3. **Check every polarised part in the placement preview** before confirming: diodes, LEDs, ICs,
-   the ESP32 and the USB-C. On rev 11, look especially at the status LEDs D8 and D23 (D8 changed
-   footprint family).
+   the ESP32 and the USB-C. Look especially at the status LEDs D8 and D23 (D8 changed footprint
+   family in rev 11) and the new U12 (INA226, MSOP-10) and U9 (THVD1420).
 
 JLCPCB doesn't fit the battery connector housing and cell, the OLED module, or any unpopulated
 headers. Add those yourself.
@@ -150,23 +151,41 @@ Everything under `hardware/` is produced by scripts, so the board can be rebuilt
 | `netlist.py` | Every part, its JLCPCB part number, and which net each pad joins |
 | `placement.py` | Where each part sits |
 | `build_pcb.py` | Makes `wiegand-bridge.kicad_pcb`, unrouted, from the two files above |
-| `route.py` | Thermal vias, hand routes for the fine-pitch parts, GND fan-out, Freerouting, pours |
+| `route.py` | Thermal vias, hand routes for the fine-pitch parts, GND fan-out, Freerouting, pours; fails on anything unconnected |
+| `freeze.py`, `routing.json` | The frozen routing (since rev 12): `save` records the finished board's tracks and vias, `replay` lays them back |
+| `padgap.py` | Pre-route: pads of different nets closer than 0.25 mm |
 | `stitch.py`, `via_fix.py`, `gndcheck.py`, `dfm_post.py`, `audit.py` | Stitching, vias out of pads, ground connectivity, paste and pours, mechanical and current audit |
 | `finish_net.py` | Routes one straggling connection by grid A* if Freerouting leaves one |
 | `schematic.py` | A readable schematic PDF from the netlist |
 | `fab.py` | JLCPCB outputs into `fab/` |
 
+The routing is **frozen**: `routing.json` holds every track and via of the reviewed board and a
+rebuild replays it, so a fix is a small edit to that file rather than a new layout.
+
 ```bash
 cd hardware
 python3 build_pcb.py                       # needs KiCad 9's pcbnew Python module
-ROUTE_WORK=/tmp/wb python3 route.py 30     # needs Java + Freerouting 2.4.x
+python3 freeze.py replay                   # lay routing.json's copper back, rebuild the pours
+python3 dfm_post.py
+python3 gndcheck.py && python3 audit.py && python3 fab.py
+kicad-cli pcb drc wiegand-bridge.kicad_pcb
+```
+
+Routing afresh, only when placement changes (the next review then covers all copper):
+
+```bash
+cd hardware
+python3 build_pcb.py
+python3 padgap.py 0.25                     # must report 0 pad pairs before routing
+ROUTE_WORK=/tmp/wb python3 route.py 60     # needs Java + Freerouting 2.4.x; exits non-zero if anything is unconnected
 python3 stitch.py && python3 stitch.py --islands
-python3 via_fix.py                         # must report 0 vias inside pad openings
+python3 via_fix.py --apply && python3 via_fix.py   # the second run must report 0 vias inside pad openings
 python3 gndcheck.py
 python3 dfm_post.py
 python3 audit.py
 python3 fab.py
 kicad-cli pcb drc wiegand-bridge.kicad_pcb
+python3 freeze.py save                     # record the copper in routing.json
 ```
 
 Tools: KiCad 9.0, Freerouting 2.4.1 (OpenJDK), `easyeda2kicad` 1.0.1 (for `lib/`), ngspice 44.

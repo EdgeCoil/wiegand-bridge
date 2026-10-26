@@ -2,8 +2,10 @@
 # SPDX-License-Identifier: MIT
 # edgecoil wiegand-bridge -- ESPHome config for the revision 10 board (hardware/).
 #
-# Written for the rev 11 board, and tested on rev 10, where IO47 (rev 11's green OK LED) goes only to
-# the unfitted J6, so driving it is harmless. Work through docs/design.md *Bench tests* first.
+# Written for the rev 12 board. The tested build ran on rev 10, where IO47 (the green OK LED since
+# rev 11) goes only to the unfitted J6, so driving it is harmless; rev 10 and 11 boards read the reader
+# supply and current on IO2/IO9 instead of the rev 12 INA226, so on those the ina226 sensor reports
+# nothing found. Work through docs/design.md *Bench tests* first.
 # The OLED is an optional package (wiegand-bridge-oled.yaml): include it once a screen is fitted.
 #
 # THIS DEVICE ONLY REPORTS. There is no relay output defined: credentials go to Home Assistant as
@@ -99,7 +101,7 @@ pca9554:
     address: 0x20
     pin_count: 16
 
-# rev 10: RS-485 / OSDP port on UART0 (SP3485, DE on IO38). No OSDP component exists in ESPHome
+# rev 10: RS-485 / OSDP port on UART0 (THVD1420 since rev 12, SP3485 before; DE on IO38). No OSDP component exists in ESPHome
 # yet; the UART is declared so the pins are claimed and the port can be bench-tested.
 uart:
   - id: rs485
@@ -263,21 +265,23 @@ sensor:
   - platform: wifi_signal
     name: "${friendly_name} RSSI"
     update_interval: 300s
-  - platform: adc
-    pin: GPIO2
-    name: "${friendly_name} reader supply"
-    attenuation: 12db
-    filters:
-      - multiply: 7.667          # R31 100k / R32 15k
-    update_interval: 60s
-  - platform: adc
-    pin: GPIO9
-    name: "${friendly_name} reader current"
-    unit_of_measurement: mA
-    attenuation: 12db
-    filters:
-      - multiply: 238.1          # 0.2 ohm shunt x 21 gain: 4.2 mV per mA (sim/isense.cir)
+  # rev 12: reader monitor U12 INA226 (0x40), 0.1 ohm high-side shunt ahead of F1; its bus voltage
+  # is the reader terminal (after F1), so a tripped F1 reads as a low supply, not a missing reader.
+  - platform: ina226
+    i2c_id: bus_a
+    address: 0x40
+    shunt_resistance: 0.1 ohm
+    max_current: 0.8A
+    adc_averaging: 16
     update_interval: 30s
+    current:
+      name: "${friendly_name} reader current"
+      unit_of_measurement: mA
+      accuracy_decimals: 1
+      filters:
+        - multiply: 1000
+    bus_voltage:
+      name: "${friendly_name} reader supply"
   - platform: adc
     id: battery_v
     pin: GPIO1
