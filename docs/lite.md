@@ -101,7 +101,8 @@ wire ──┬── SM712 (one per pair) ── GND
 - **Cable length.** The line rises through 23 kΩ: about 15 µs on the board alone, 0.16 ms with 5 nF
   of cable. For a reader without pull-ups of its own, keep cable capacitance under about 4 nF for
   SIA's shortest 200 µs pulse interval (about 6 nF with negligible leakage on the node; 4 nF allows
-  the datasheet-maximum 16 µA), or about 30 nF for the usual 1 ms. That takes the interval as the
+  the datasheet-maximum 16 µA), or about 20 nF for the usual 1 ms (30 nF with negligible leakage;
+  20 nF is roughly 150 m of typical cable, Wiegand's usual maximum run). That takes the interval as the
   high time between pulses; if a reader counts it start to start with 100 µs pulses, the high time
   halves and so does the limit (about 2 nF at 16 µA, 2.9 nF with none: roughly 15–20 m of typical
   cable; audit round 6). A reader with its own pull-ups (most open-collector readers have 1k–10k to
@@ -157,9 +158,9 @@ frames are at most 31 bits.
   hysteresis), and pulled low again when it falls below 2.755–2.825 V. That is below the module's
   3.0 V minimum: in normal running the rail is 3.24–3.36 V (3.27–3.33 V is the buck's CCM regulation
   limit; at light load it runs in PFM), but on a slowly collapsing input the buck runs down to about
-  2.9 V in, and +3V3 can sit at 2.83–3.0 V with EN released, where only the ESP32's own brown-out
-  detector acts. The G33 version (3.07 V nominal, releasing at up to about 3.18 V) would sit too close
-  to the buck's 3.27 V minimum.
+  2.9 V in, and +3V3 can sit at 2.755–3.0 V with EN released, where only the ESP32's own brown-out
+  detector acts. The G33 version (3.07 V nominal, releasing at up to about 3.19 V and falling at up to
+  3.11 V) would sit too close to the buck's 3.24 V minimum (3.27 V in CCM).
   SW2 (RESET) pulls U3's MR input, which has its own pull-up (≥ 70 kΩ, 90 kΩ typical) and C45 10 nF
   against noise.
 
