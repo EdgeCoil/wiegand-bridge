@@ -158,8 +158,9 @@ part("D3", "sma_ss34", "SS34", "C8678", {"1": "+5V", "2": "+5V_BUCK"})
 part("D4", "sma_ss34", "SS34", "C8678", {"1": "+5V", "2": "VBUS"})
 # rev 12 (audit round 3): with USB unplugged and +5V up, D4's reverse leakage charges VBUS (C6), and
 # nothing loaded it, so a Type-C source could find VBUS above vSafe0V (0.8 V) and refuse to attach.
-# SS34 IR <= 0.5 mA guaranteed (40 V, 25 C): 1k holds VBUS <= 0.5 V, with margin for a warm board
-# (no hot figure is guaranteed; audit round 4). It draws 5 mA (25 mW) on USB.
+# SS34 IR <= 0.5 mA guaranteed (40 V, 25 C): 1k holds VBUS <= 0.5 V. MDD also guarantees <= 5 mA at
+# 125 C (~2 mA at 85 C interpolated, less at D4's ~4.6 V reverse), so a hot board with 12 V present may
+# hold VBUS above 0.8 V (documented: remove 12 V). It draws 5 mA (25 mW) on USB.
 res("R94", "1k", "VBUS", "GND")
 part("D11", "sma_ss34", "SS34", "C8678", {"1": "VSYS", "2": "+5V"})
 cap("C7", "22u25", "VSYS")

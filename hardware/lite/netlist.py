@@ -10,11 +10,13 @@ the W5500/Qwiic headers, the reader current sense.
 
 - One pluggable 3.5 mm terminal block, 8 ways: 12V GND D0 D1 LED BEEP A B.
 - Four BIDIRECTIONAL open-drain 5 V lines (D0, D1, LED, BEEP): each has rev 10's input cell
-  (1k + 5.1 V zener + 100 pF + 10k pull-up -> 74LVC2G17 Schmitt buffer -> GPIO) AND rev 10's
-  output cell (2N7002 open drain, 100 ohm gate, 100k pull-down) on the same wire. Reader mode:
+  (1k + 5.1 V zener + 100 pF + pull-up -> 74LVC2G17 Schmitt buffer -> GPIO) AND rev 10's
+  output cell (open-drain FET, 100 ohm gate, 100k pull-down) on the same wire. Reader mode:
   read D0/D1, drive LED/BEEP. Reader-emulation mode (toward an access controller): pulse D0/D1,
-  read LED/BEEP. The 10k pull-up keeps the wiegand component quiet with nothing attached.
-- RS-485/OSDP port kept (SP3485 on UART0), minus rev 10's strong-bias jumpers and node-power terminal.
+  read LED/BEEP. The pull-up (22k since rev 2 round 3; the FET an AO3400A since rev 2) keeps the
+  wiegand component quiet with nothing attached.
+- RS-485/OSDP port kept (THVD1420 on UART0 since rev 2), minus rev 10's strong-bias jumpers and
+  node-power terminal.
 - ESP32-S3-MINI-1 (15.4 x 20.5 mm; the N4R2 variant is what JLCPCB stocks, 2026-10-21). Same chip
   family as rev 10, so the firmware carries over with a pin remap (firmware/wiegand-bridge-lite.yaml).
 - 3.3 V straight from the input: AP63203 (fixed 3.3 V, 3.8-32 V in, TSOT-26), per its datasheet
@@ -40,13 +42,14 @@ Revision 2 (2026-10-27), from the rev 1 review's open items and a passive-to-IC 
   The RESET button moves to its MR input (debounced by the delay). R4 stays as RESET's pull-up.
 - Q1-Q4 AO3400A (C20917, Basic, same SOT-23 pinout as the 2N7002): fully on at a 3.3 V gate, so a
   line sinks a controller's 1k pull-up to 12 V (the 2N7002's 2.5 V worst-case threshold did not).
-- D26 BAT54 (C22466368, Preferred) feeds the four 10k line pull-ups (+3V3_PU) from +3V3: a reader
-  powered while the board is not no longer back-feeds the dead 3.3 V rail through 1k + 10k per line.
+- D26 BAT54 (C22466368, Preferred) feeds the four line pull-ups (+3V3_PU) from +3V3: a reader
+  powered while the board is not no longer back-feeds the dead 3.3 V rail through 1k + pull-up per line.
 - C1/C2 1206 50 V (C13585): the 0805 25 V parts held 40-55 % of 10 uF at 12-16 V bias.
 
 Rev 2 audit round 1 (2026-10-27), with the board grown from 42 x 44 to 42 x 47 mm to fit them:
 - R86 1k between U3's RESET and EN: U3 discharged C13 (1 uF) with no limit, ~35 mA against its
-  5 mA absolute maximum (TPS3808 6.1). EN low is then 0.30 V (1k/11k of 3.3 V).
+  5 mA absolute maximum (TPS3808 6.1). EN low is then <= 0.71 V on guaranteed figures (U3's VOL 0.4 V plus 1k/11k of
+  the rest), against the ESP32's VIL of 0.81 V.
 - C45 10 nF on MR (28 mm of route beside other signals; the chip reacts to ~1 ns pulses).
 - C46 100 nF on +3V3_PU (59 mm of 0.2 mm track fed through the BAT54).
 - R87 100k bleed on VBUS: D3's reverse leakage charged an unplugged VBUS toward +VIN.
@@ -145,8 +148,8 @@ part("J1", "usbc", "USB-C", "C2765186",
 cap("C6", "10u25", "VBUS")
 # rev 2: bleeds D3's reverse leakage off an unplugged VBUS. Round 2: 100k held VBUS low only below
 # ~45 C (typical); the SS34 is guaranteed only to 0.5 mA, and a Type-C source waits for VBUS < 0.8 V.
-# 1k: <= 0.5 V at 0.5 mA, with margin for a warm board (no hot figure is guaranteed; full board's
-# audit round 4); 5 mA from USB.
+# 1k: <= 0.5 V at 0.5 mA (25 C). MDD also guarantees <= 5 mA at 125 C; ~2 mA at 85 C interpolated, so
+# a hot board with 12 V present may hold VBUS near 2 V (documented: remove 12 V). 5 mA from USB.
 res("R87", "1k", "VBUS", "GND")
 res("R1", "5.1k", "CC1", "GND")
 res("R2", "5.1k", "CC2", "GND")
@@ -211,12 +214,11 @@ for raw, node, tx, rs, z, c, rp, q, rg, rgd in CELLS:
 # rev 2: the pull-ups' supply, so a powered reader cannot back-feed a dead +3V3 through them
 part("D26", "sot23_bat54", "BAT54", "C22466368", {"1": "+3V3", "3": "+3V3_PU"})
 # rev 2 (audit round 2, S1): D26 sources but cannot sink, so a reader's own 5 V pull-ups (or a
-# controller's 12 V) lifted +3V3_PU to ~4.9 V through each cell's 1k + 10k, and C46 held it through a
+# controller's 12 V) lifted +3V3_PU to ~4.9 V through each cell's 1k + pull-up, and C46 held it through a
 # 50 us pulse: the buffer node then needed the reader at <= ~0.4 V. R95 4.7k (in C46's land; C46
-# removed) holds the rail down, for 0.7 mA. Worst case over -40..85 C (+3V3 3.24-3.36 V, D26's VF from
-# its maximum to 35 mV under, LVC VT- 0.80 V, 10 uA leakage on each node; audit round 3's deck), with
-# the 22k pull-ups: a reader's VOL may be up to 0.65 V (0.58 V with a controller's 12 V/1k on the
-# line); idle-high >= 2.62 V against VT+ <= 2.0 V.
+# removed) holds the rail down, for 0.7 mA. With the 22k pull-ups the line's low limit is
+# (0.8 x 23 - 3.36) / 22 = 0.684 V at the highest rail (D26 drop 0), so 0.65 V at the terminal holds
+# whatever is attached; idle-high leaves room for ~31-38 uA leakage per node (audit rounds 3-4).
 res("R95", "4.7k", "+3V3_PU", "GND")
 
 # --- Block 6: RS-485 / OSDP on UART0 (rev 10 block 14, less the bias network) ----------------------

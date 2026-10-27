@@ -25,7 +25,7 @@ runs from **12 V ± 4 V (8–16 V)**, keeps **USB-C** for programming (and bench
 | Connectors | 11 screw terminals, OLED socket, headers | **one 8-way 3.5 mm pluggable block**: `12V GND D0 D1 LED BEEP A B` |
 | Status LEDs | PWR, FAULT, OK, CHG | PWR, FAULT (ESPHome status), OK (API connected) |
 | Reset | RC on EN | **TPS3808 supervisor on EN**; RESET button on its MR input |
-| Parts | 200 | **82** (38 part numbers) |
+| Parts | 200 | **82** (37 part numbers) |
 
 The security model is the full board's ([design.md](design.md), *Security*): the board reports
 credentials to Home Assistant as events and has no output toward a lock.
@@ -39,7 +39,7 @@ credentials to Home Assistant as events and has no output toward a lock.
 | **Q1–Q4 AO3400A** (C20917, Basic) replace the 2N7002s | Fully on at a 3.3 V gate: the 2N7002's 2.5 V worst-case threshold left ~15–20 mA, marginal for a controller's 1k pull-up to 12 V |
 | **D26 BAT54** (C22466368, Preferred) feeds the four line pull-ups (`+3V3_PU`) | A reader powered while the board is not no longer back-feeds the dead 3.3 V rail through each line's 1k + 10k |
 | **C1/C2 1206 50 V** (C13585) replace the 0805 25 V parts | The 0805s held 40–55 % of 10 µF at 12–16 V bias |
-| **R86** 1 kΩ between U3's RESET and EN | U3 discharged C13 (1 µF) unlimited: ~35 mA against its 5 mA absolute maximum. EN low is now 0.30 V |
+| **R86** 1 kΩ between U3's RESET and EN | U3 discharged C13 (1 µF) unlimited: ~35 mA against its 5 mA absolute maximum. EN low is now ≤ 0.71 V on guaranteed figures (U3's 0.4 V VOL plus R86's share), against the ESP32's 0.81 V |
 | **C45** 10 nF on MR | 28 mm of route beside other signals, into an input that reacts to ~1 ns pulses |
 | **R95** 4.7 kΩ from `+3V3_PU` to GND (in round 1's C46 land; C46 removed), and the four line pull-ups 22 kΩ (were 10 kΩ) | D26 can't sink, so a reader's own 5 V pull-ups lifted the rail to ~4.9 V and the line's low level with it (audit round 2) |
 | **R87** 1 kΩ on VBUS | D3's reverse leakage charged an unplugged VBUS toward +VIN; a Type-C source waits for VBUS under 0.8 V (100 kΩ in round 1 held it only below ~45 °C) |
@@ -82,14 +82,22 @@ wire ──┬── SM712 (one per pair) ── GND
 - The 22k pull-ups hang off `+3V3_PU`, fed from 3.3 V through D26 (BAT54), so the idle-high node
   sits a diode drop below 3.3 V (about 2.95 V), still well above the buffer's 2.0 V threshold. D26
   can't sink current, so R95 (4.7 kΩ) holds the rail down when the far end has pull-ups of its own.
-- **The reader's output must pull a line to 0.65 V or lower** (at about 0.14 mA; 0.58 V where a
-  controller's 12 V/1k pull-ups are also on the line). The buffer node sits at the reader's low level
-  plus 1/23 of the difference to the rail, and the 74LVC2G17's low threshold can be as low as 0.8 V.
-  These are worst-case figures over −40 to 85 °C: +3V3 anywhere in 3.24–3.36 V, D26's drop from its
-  maximum to 35 mV under it, and 10 µA of leakage on each node (simulated, audit round 3's deck).
-  Idle-high is at least 2.62 V against the buffer's 2.0 V. Open-collector and open-drain readers meet
-  this; check a reader with a series resistor in its outputs. (Round 2 quoted 0.53 V from the most
-  favourable corner, with 10 kΩ pull-ups; round 3 found it was 0.51 V at worst.)
+- **The reader's output must pull a line to 0.65 V or lower at the terminal** (at about 0.14 mA).
+  The buffer node sits at the line's low level plus 1/23 of the difference to the rail, and the
+  74LVC2G17's low threshold can be as low as 0.8 V. With the rail at its highest (+3V3 at 3.36 V and
+  no drop across D26 at all) the bound is (0.8 × 23 − 3.36) / 22 = 0.684 V, whatever else is on the
+  line, so 0.65 V needs no assumption about D26 (audit round 4). Open-collector and open-drain readers
+  meet this; a reader with series resistance in its outputs must still reach 0.65 V at the terminal.
+  (Round 2 quoted 0.53 V from the most favourable corner, with 10 kΩ pull-ups.)
+- **Idle-high against leakage.** The datasheet maxima on each node add to about 12 µA at 25 °C (LVC
+  input 5 µA, MMSZ5231B 5 µA at 2 V, AO3400A 1 µA, SM712 1 µA; 16 µA with the AO3400A's 55 °C
+  figure; nothing hot is given for the zener or the SM712). The buffer's high threshold scales with
+  its supply: about 2.18 V at 3.24 V. The 22k pull-up leaves room for about 31–38 µA per node
+  (simulated, audit round 4: 2.49 V at −40 °C with 16 µA); the old 10k left about 85 µA.
+- **Cable length.** The line rises through 23 kΩ: about 15 µs on the board alone, 0.16 ms with 5 nF
+  of cable. For a reader without pull-ups of its own, keep cable capacitance under about 6 nF for
+  SIA's shortest 200 µs pulse interval, or about 30 nF for the usual 1 ms. A reader with its own
+  pull-ups (most open-collector readers have 1k–10k to 5 V) is not limited by this.
 
 ESPHome has no Wiegand transmitter, so `wiegand_tx` bit-bangs one in a lambda: 50 µs low per bit,
 2 ms between bits, a 1 on D1 and a 0 on D0. `wiegand_send_26` builds the standard 26-bit frame
@@ -123,15 +131,17 @@ frames are at most 31 bits.
   alone the buck sees 4.6 V (minimum 3.8). No ESD part on D+/D− (the port is inside the enclosure).
   R87 (1 kΩ) bleeds D3's reverse leakage off VBUS when no cable is attached: at the SS34's 0.5 mA
   maximum (25 °C, 40 V) that is 0.5 V, under the 0.8 V a Type-C source waits for before it attaches.
-  Nothing is guaranteed hotter or at 12–16 V; the typical curve stays under 0.5 mA to about 90 °C. If
-  a host won't attach to a warm board with 12 V present, remove the 12 V first. R87 draws 5 mA on USB. On USB alone the host
+  MDD also guarantees ≤ 5 mA at 125 °C (40 V): interpolated, about 2 mA at 85 °C, so VBUS could sit
+  near 2 V on a hot board with 12 V present (less at the real 12–16 V reverse bias; the typical
+  curve stays under 0.5 mA to about 90 °C). If a host won't attach to a warm board with 12 V present,
+  remove the 12 V first. R87 draws 5 mA on USB. On USB alone the host
   sees C6 plus the buck's input capacitors (about 26 µF effective), more than USB 2.0's 10 µF:
   that's fine for bench use from a PC or a USB charger, but don't hot-plug it into a hub port that
   enforces inrush limits.
 - Load: the S3 (≤ 0.5 A peaks on Wi-Fi), THVD1420, two buffers, three LEDs: ~0.15 A at 12 V.
 - **Back-feed when the reader is powered and the board is not** (the full board never had this
   case, because it powered the reader): in rev 1 the reader's 5 V pull-ups reached the dead 3.3 V
-  rail through each cell's 1k + 10k, and the module could start from a pre-biased rail. Rev 2
+  rail through each cell's 1k + pull-up (10k then), and the module could start from a pre-biased rail. Rev 2
   blocks that path with D26 and, separately, holds EN low until the rail is good (U3).
 - **Reset:** U3 TPS3808G30 drives EN through R86 1 kΩ (open drain, R4 10k pull-up, C13 1 µF kept):
   EN is released 12–28 ms after +3V3 passes 2.79 V. SW2 (RESET) pulls U3's MR input, which has its own

@@ -117,8 +117,9 @@ Keep the logger at `INFO` in service. At `DEBUG`, ESPHome logs the Wiegand frame
 - **`+5V_BUCK` and USB `VBUS` are diode-ORed** (D3, D4), so neither back-feeds the other, including a
   laptop during first flash. R94 (1 kΩ) loads VBUS so D4's reverse leakage can't hold an unplugged
   VBUS up: a Type-C host waits for VBUS under 0.8 V before it attaches. The SS34's 0.5 mA maximum
-  (25 °C, 40 V) gives at most 0.5 V; nothing hotter is guaranteed, so if a host won't attach to a warm
-  board with 12 V present, remove the 12 V first. R94 draws 5 mA (25 mW) on USB.
+  (25 °C, 40 V) gives at most 0.5 V. Its 125 °C maximum is 5 mA (about 2 mA at 85 °C, interpolated,
+  less at D4's 4.6 V reverse bias), so if a host won't attach to a warm board with 12 V present,
+  remove the 12 V first. R94 draws 5 mA (25 mW) on USB.
 - **U3 TPS63001** buck-boost makes `+3V3` from `VSYS` (1.8–5.5 V in), so the ESP32 stays up across the
   whole cell range.
 - **The reader's supply is always regulated.** U6 (MT3608) boosts `VSYS` to 12.6 V, or 13.2 V with
