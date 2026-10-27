@@ -41,7 +41,7 @@ credentials to Home Assistant as events and has no output toward a lock.
 | **C1/C2 1206 50 V** (C13585) replace the 0805 25 V parts | The 0805s held 40–55 % of 10 µF at 12–16 V bias |
 | **R86** 1 kΩ between U3's RESET and EN | U3 discharged C13 (1 µF) unlimited: ~35 mA against its 5 mA absolute maximum. EN low is now ≤ 0.71 V on guaranteed figures (U3's 0.4 V VOL plus R86's share), against the ESP32's 0.81 V |
 | **C45** 10 nF on MR | 28 mm of route beside other signals, into an input that reacts to ~1 ns pulses |
-| **R95** 4.7 kΩ from `+3V3_PU` to GND (in round 1's C46 land; C46 removed), and the four line pull-ups 22 kΩ (were 10 kΩ) | D26 can't sink, so a reader's own 5 V pull-ups lifted the rail to ~4.9 V and the line's low level with it (audit round 2) |
+| **R95** 4.7 kΩ from `+3V3_PU` to GND (in round 1's C46 land; C46 removed), and the four line pull-ups 22 kΩ (were 10 kΩ) | D26 can't sink, so a reader's own 5 V pull-ups lifted the rail to ~4.9 V and the line's low level with it (audit round 2; the pull-ups went to 22 kΩ in round 3) |
 | **R87** 1 kΩ on VBUS | D3's reverse leakage charged an unplugged VBUS toward +VIN; a Type-C source waits for VBUS under 0.8 V (100 kΩ in round 1 held it only below ~45 °C) |
 | **D1 SS56** (60 V, C18199169, Preferred) replaces the SS34 | In a negative surge D2 holds +VIN_F at −29 V while the input capacitors hold +VIN at up to 16 V: 45 V across D1 |
 | **R88/R89** 10 Ω, pulse-proof (C844519) between the SM712 and U9's A/B | The SM712 clamps above the THVD1420's ±16 V (TI's surge reference circuit). They cost drive: about 1.24 V on a doubly terminated bus at 3.3 V, under TIA-485's 1.5 V; receivers need 0.2 V, so a bus of fail-safe nodes is fine |
@@ -106,8 +106,8 @@ wire ──┬── SM712 (one per pair) ── GND
   its grounded shield can be nearer 180 pF/m, about 110 m, so check your cable's conductor-to-shield
   figure). That takes the interval as the
   high time between pulses; if a reader counts it start to start with 100 µs pulses, the high time
-  halves and so does the limit (about 2 nF at 16 µA, 2.9 nF with none: roughly 15–20 m at 130 pF/m;
-  audit round 6). A reader with its own pull-ups (most open-collector readers have 1k–10k to
+  halves and so does the limit (about 2 nF at 16 µA, 2.9 nF with none: roughly 15–22 m at 130 pF/m,
+  11–16 m for a shielded pair at ~180 pF/m; audit round 6). A reader with its own pull-ups (most open-collector readers have 1k–10k to
   5 V) is not limited by this.
 
 ESPHome has no Wiegand transmitter, so `wiegand_tx` bit-bangs one in a lambda: 50 µs low per bit,
