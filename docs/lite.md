@@ -40,7 +40,7 @@ credentials to Home Assistant as events and has no output toward a lock.
 | **D26 BAT54** (C22466368, Preferred) feeds the four line pull-ups (`+3V3_PU`) | A reader powered while the board is not no longer back-feeds the dead 3.3 V rail through each line's 1k + pull-up (10k then) |
 | **C1/C2 1206 50 V** (C13585) replace the 0805 25 V parts | The 0805s held 40–55 % of 10 µF at 12–16 V bias |
 | **R86** 1 kΩ between U3's RESET and EN | U3 discharged C13 (1 µF) unlimited: ~35 mA against its 5 mA absolute maximum. EN low is now ≤ 0.71 V on guaranteed figures (U3's 0.4 V VOL plus R86's share), against the ESP32's 0.81 V |
-| **C45** 10 nF on MR | 28 mm of route beside other signals, into an input that reacts to ~1 ns pulses |
+| **C45** 10 nF on MR | about 34 mm of route (28 mm on In2 in round 1) beside other signals, into an input that reacts to ~1 ns pulses |
 | **R95** 4.7 kΩ from `+3V3_PU` to GND (in round 1's C46 land; C46 removed), and the four line pull-ups 22 kΩ (were 10 kΩ) | D26 can't sink, so a reader's own 5 V pull-ups lifted the rail to ~4.9 V and the line's low level with it (audit round 2; the pull-ups went to 22 kΩ in round 3) |
 | **R87** 1 kΩ on VBUS | D3's reverse leakage charged an unplugged VBUS toward +VIN; a Type-C source waits for VBUS under 0.8 V (100 kΩ in round 1 held it only below ~45 °C) |
 | **D1 SS56** (60 V, C18199169, Preferred) replaces the SS34 | In a negative surge D2 holds +VIN_F at −29 V while the input capacitors hold +VIN at up to 16 V: 45 V across D1 |
@@ -98,17 +98,19 @@ wire ──┬── SM712 (one per pair) ── GND
   while the node idles at 2.5–3.0 V, which the room below still covers about twice over). The buffer's high threshold scales with
   its supply: about 2.18 V at 3.24 V. The 22k pull-up leaves room for about 31–38 µA per node
   (simulated, audit round 4: 2.49 V at −40 °C with 16 µA); the old 10k left about 85 µA.
-- **Cable length.** The line rises through 23 kΩ: about 15 µs on the board alone, 0.16 ms with 5 nF
-  of cable. For a reader without pull-ups of its own, keep cable capacitance under about 4 nF for
-  SIA's shortest 200 µs pulse interval (about 6 nF with negligible leakage on the node; 4 nF allows
-  the datasheet-maximum 16 µA), or about 20 nF for the usual 1 ms (30 nF with negligible leakage;
-  at about 130 pF/m that is roughly 150 m, Wiegand's usual maximum run; a shielded pair measured to
-  its grounded shield can be nearer 180 pF/m, about 110 m, so check your cable's conductor-to-shield
-  figure). That takes the interval as the
-  high time between pulses; if a reader counts it start to start with 100 µs pulses, the high time
-  halves and so does the limit (about 2 nF at 16 µA, 2.9 nF with none: roughly 15–22 m at 130 pF/m,
-  11–16 m for a shielded pair at ~180 pF/m; audit round 6). A reader with its own pull-ups (most open-collector readers have 1k–10k to
-  5 V) is not limited by this.
+- **Cable length.** A reader without pull-ups of its own lets the line rise through 23 kΩ: about
+  15 µs on the board alone. The cable's capacitance must let it reach the buffer's threshold within
+  the high time between pulses. Limits (audit rounds 6-10), each with the datasheet-maximum 16 µA of
+  leakage on the node and, in brackets, with none:
+
+  | High time between pulses | Max cable capacitance | At 130 pF/m | At ~180 pF/m (shielded pair to its shield) |
+  |---|---|---|---|
+  | 1 ms (the usual Wiegand timing) | about 20 nF (30 nF) | about 150 m (230 m) | about 110 m (165 m) |
+  | 200 µs (SIA's shortest interval, counted as the gap between pulses) | about 4 nF (6 nF) | about 30 m (45 m) | about 22 m (33 m) |
+  | 100 µs (SIA's 200 µs interval counted start to start, with 100 µs pulses) | about 2 nF (2.9 nF) | about 15 m (22 m) | about 11 m (16 m) |
+
+  Check your cable's conductor-to-shield figure. A reader with its own pull-ups (most open-collector
+  readers have 1k–10k to 5 V) is not limited by this.
 
 ESPHome has no Wiegand transmitter, so `wiegand_tx` bit-bangs one in a lambda: 50 µs low per bit,
 2 ms between bits, a 1 on D1 and a 0 on D0. `wiegand_send_26` builds the standard 26-bit frame
