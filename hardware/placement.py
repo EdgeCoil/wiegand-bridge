@@ -35,6 +35,7 @@ at("R1", 108.8, 122.8, 90)
 at("R2", 108.6, 133.4, 270)   # below J1: CC2 is pre-routed to it (route.py): the only reachable spot
 at("C6", 110.6, 126.6, 90)
 at("D4", 113.0, 131.0, 0)
+at("R94", 115.2, 134.2, 270)   # rev 12 round 3: VBUS bleed, under D4's VBUS pad (routing.json stub)
 at("SW2", 115.6, 124.6)          # RESET
 at("SW1", 123.6, 124.6)          # BOOT
 at("R5", 128.6, 124.6, 90)

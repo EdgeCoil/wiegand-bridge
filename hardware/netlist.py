@@ -98,7 +98,7 @@ FP = {
 R = {"100": "C22775", "1k": "C21190", "4.7k": "C23162", "5.1k": "C23186", "10k": "C25804",
      "15k": "C22809", "100k": "C25803", "200k": "C25811", "39k": "C23153", "47k": "C25819",
      "8.2k": "C25981", "20k": "C4184", "120": "C22787", "390": "C23151", "68k": "C23231",
-     "10": "C22859", "470": "C23179"}
+     "10": "C22859", "470": "C23179", "1.5k": "C22843"}
 C = {"100p": ("c0603", "C14858"), "10n": ("c0603", "C57112"), "100n": ("c0603", "C14663"),
      "1u": ("c0603", "C15849"), "10u": ("c0603", "C19702"), "10u25": ("c0805", "C15850"),
      "22u25": ("c0805", "C45783"), "22u25_1206": ("c1206", "C12891"), "22u6": ("c0603", "C59461"),
@@ -155,6 +155,10 @@ res("R1", "5.1k", "CC1", "GND")
 res("R2", "5.1k", "CC2", "GND")
 part("D3", "sma_ss34", "SS34", "C8678", {"1": "+5V", "2": "+5V_BUCK"})
 part("D4", "sma_ss34", "SS34", "C8678", {"1": "+5V", "2": "VBUS"})
+# rev 12 (audit round 3): with USB unplugged and +5V up, D4's reverse leakage charges VBUS (C6), and
+# nothing loaded it, so a Type-C source could find VBUS above vSafe0V (0.8 V) and refuse to attach.
+# SS34 IR <= 0.5 mA guaranteed (40 V, 25 C): 1.5k holds VBUS <= 0.75 V; it draws 3.3 mA on USB.
+res("R94", "1.5k", "VBUS", "GND")
 part("D11", "sma_ss34", "SS34", "C8678", {"1": "VSYS", "2": "+5V"})
 cap("C7", "22u25", "VSYS")
 res("R15", "10k", "+5V", "EXT_SENSE")
@@ -289,22 +293,31 @@ part("J6", "hdr8", "TFT/EPD", None,
       "7": "DISP_RST", "8": "SPI_BL_BUSY"})
 
 # --- Block 11: inputs ---------------------------------------------------------------------------
+# Requirements (rev 12, audit round 3): dry contacts to GND. Closed (<= 1k contact) reads <= 0.5 V
+# (VIL 0.825 V), open reads >= VIH 2.475 V. Positive miswire to +36 V sustained: reads "off", nothing
+# conducts into +3V3. Negative miswire to -24 V sustained: every part within its rating (-36 V
+# briefly, the SMF36CA's standoff). GPIO current on a negative miswire limited to tens of uA.
+# R40-R43 were 1k 0603 (0.1 W): at -24 V they carried ~23 mA, 0.53 W. At 4.7k (Vishay CRCW-HP,
+# pulse-proof, 0.25 W) it is 4.9 mA, 0.11 W; -36 V is 0.26 W, briefly. The pull-up goes to 47k so the
+# closed level stays low (3.3 x 4.7/51.7 = 0.30 V); wetting current is ~64 uA (was ~0.3 mA).
 part("J9", "kf128", "IN1 IN2", "C474952", {"1": "IN1_RAW", "2": "IN2_RAW"})
 part("J12", "kf128", "GND IN3", "C474952", {"1": "GND", "2": "IN3_RAW"})
 part("J13", "kf128", "IN4 GND", "C474952", {"1": "IN4_RAW", "2": "GND"})
 for n, (q, rs, rp, c) in enumerate((("Q7", "R40", "R44", "C27"), ("Q8", "R41", "R45", "C28"),
                                    ("Q9", "R42", "R46", "C29"), ("Q10", "R43", "R47", "C30")), 1):
-    res(rs, "1k", f"IN{n}_RAW", f"IN{n}_D")
+    part(rs, "r0603", "4.7k", "C844791", {"1": f"IN{n}_RAW", "2": f"IN{n}_D"})   # CRCW06034K70FKEAHP
     part(q, "sot23_2n7002", "2N7002", "C8545", {"1": "+3V3", "2": f"IN{n}_S", "3": f"IN{n}_D"})
-    res(rp, "10k", "+3V3", f"IN{n}_S")   # rev 12 round 2: pull-up on the FET side, so the series R is no divider
+    res(rp, "47k", "+3V3", f"IN{n}_S")   # rev 12 round 2: pull-up on the FET side, so the series R is no divider
     # rev 12 (audit round 2, S1): the 2N7002 conducts both ways, so a negative INx_D drags its source
-    # (and the GPIO) with it; only a series resistor limits what reaches the pin. 10k: a closed contact
-    # still reads ~0.33 V (VIL 0.825 V); -24 V on the wire puts <= ~40 uA into the pin's own clamp.
+    # (and the GPIO) with it; only a series resistor limits what reaches the pin. -24 V on the wire puts
+    # ~30 uA into the pin's own clamp, the pin a few hundred mV below ground (audit round 3: -0.44 V).
+    # A BAT54 clamp at the pin was declined: its hot leakage through 57k erodes the open-high level.
     res(f"R{89 + n}", "10k", f"IN{n}_S", f"IN{n}")
     cap(c, "10n", f"IN{n}")
     # rev 12 (audit round 1, S4): a negative miswire pulled INx_D (and through the conducting FET, the
-    # GPIO) far below ground (-24 V: ~22 mA). This 75 V clamp holds INx_D at about -0.9 V; R90-R93
-    # then limit what reaches the GPIO. +36 V is within its 75 V reverse rating.
+    # GPIO) far below ground. This 75 V clamp holds INx_D at about -0.75 V (4.9 mA at -24 V), which also
+    # keeps the FET's gate within +-20 V; R90-R93 then limit what reaches the GPIO. +36 V is within its
+    # 75 V reverse rating.
     part(f"D{27 + n}", "sod123f", "1N4148W", "C81598", {"1": f"IN{n}_D", "2": "GND"})   # 1 = K
 
 # --- Block 12 (rev 10): I/O expander, TCA9535 at 0x20 ----------------------------------------------

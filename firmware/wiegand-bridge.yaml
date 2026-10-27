@@ -286,6 +286,9 @@ sensor:
         # input current (~15 uA through R82): subtract them. For better than ~1.5 % of reading, add a
         # measured `- multiply:` here from one bench point (docs/design.md, Bench tests 4).
         - offset: -0.08
+        # with the reader shed neither current flows, so the offset alone would read -0.08 mA
+        - clamp:
+            min_value: 0
     bus_voltage:
       name: "${friendly_name} reader supply"
   - platform: adc

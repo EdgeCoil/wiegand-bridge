@@ -215,3 +215,41 @@ for t in board.GetTracks():          # the track itself, not its bounding box (r
 print(f"   tracks in {ant}: {sorted(hits) or 'none'}  (ground pour is also present up to the edge)")
 
 silk_audit()
+
+# rev 12 (audit round 3): the re-route ran IO6 0.205 mm past six field-terminal pins, and only the
+# fab's 0.2 mm clearance caught nothing. Every through-hole pin JLC solders (a part with an LCSC number)
+# must have other-net tracks, vias and other parts' pads >= THT_GAP away; the pour is held off by the
+# .kicad_dru rule. Polygon test, not SHAPE.GetClearance (which reports a gap for overlapping shapes).
+THT_GAP = 0.4
+print(f"\n== 7. other-net copper within {THT_GAP} mm of a JLC-soldered through-hole pin")
+tht_bad = 0
+others = [t for t in board.GetTracks()] + [p for p in board.GetPads()]
+for fp in board.GetFootprints():
+    if not (fp.HasFieldByName("LCSC") and fp.GetFieldText("LCSC")):
+        continue
+    for pad in fp.Pads():
+        if not pad.HasHole():
+            continue
+        for L in (pcbnew.F_Cu, pcbnew.B_Cu):
+            grown = pcbnew.SHAPE_POLY_SET()
+            pad.TransformShapeToPolygon(grown, L, pcbnew.FromMM(THT_GAP - 0.01), pcbnew.FromMM(0.005),   # 10 um: polygon error
+                                       pcbnew.ERROR_OUTSIDE)
+            box = pad.GetBoundingBox().GetInflated(pcbnew.FromMM(THT_GAP + 1))
+            for o in others:
+                if (o.GetNetCode() == pad.GetNetCode() and pad.GetNetCode() > 0) or not o.IsOnLayer(L):
+                    continue
+                if isinstance(o, pcbnew.PAD) and o.GetParentFootprint() == fp:
+                    continue
+                if not o.GetBoundingBox().Intersects(box):
+                    continue
+                poly = pcbnew.SHAPE_POLY_SET()
+                o.TransformShapeToPolygon(poly, L, 0, pcbnew.FromMM(0.005), pcbnew.ERROR_INSIDE)
+                poly.BooleanIntersection(grown)
+                if poly.Area() > 0:
+                    tht_bad += 1
+                    what = (f"{o.GetParentFootprint().GetReference()}.{o.GetNumber()}" if isinstance(o, pcbnew.PAD)
+                            else "via" if o.GetClass() == "PCB_VIA" else "track")
+                    print(f"   THT CLEARANCE {fp.GetReference()}.{pad.GetNumber()} ({pad.GetNetname()}) "
+                          f"{board.GetLayerName(L)}: {what} [{o.GetNetname()}]")
+print(f"   {tht_bad} problems")
+sys.exit(1 if tht_bad else 0)
