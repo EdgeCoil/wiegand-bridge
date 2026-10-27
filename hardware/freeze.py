@@ -24,6 +24,45 @@ import route  # noqa: E402
 JSON = os.path.join(HERE, "routing.json")
 
 
+SHORT = 20000      # nm: Freerouting stubs under 0.02 mm (Lite audit round 2 found nine, 0.1 nm to 13 um)
+NEAR = 2000        # nm: end points this close are the same point
+
+
+def debris(items):
+    """Segments shorter than SHORT, and pairs on one net, layer and width whose ends match within NEAR."""
+    segs = [i for i in items if "via" not in i]
+    short = [i for i in segs if abs(i["start"][0] - i["end"][0]) + abs(i["start"][1] - i["end"][1]) < SHORT]
+    same = lambda p, q: abs(p[0] - q[0]) <= NEAR and abs(p[1] - q[1]) <= NEAR
+    dup, seen = [], []
+    for i in segs:
+        k = (i["net"], i["layer"], i["w"])
+        if any(k == (j["net"], j["layer"], j["w"]) and ((same(i["start"], j["start"]) and same(i["end"], j["end"])) or
+                                                     (same(i["start"], j["end"]) and same(i["end"], j["start"]))) for j in seen):
+            dup.append(i)
+        else:
+            seen.append(i)
+    return short, dup
+
+
+def tidy(items):
+    """rev 12 / Lite rev 2 (audit round 2): drop near-duplicates, and drop each segment under SHORT,
+    moving the ends that met its far end onto its near end, so nothing is left a few um apart."""
+    short, dup = debris(items)
+    drop = {id(i) for i in dup}
+    for s in short:
+        if id(s) in drop:
+            continue
+        drop.add(id(s))
+        a, b = s["start"], s["end"]
+        for i in items:
+            if id(i) in drop or i.get("net") != s["net"]:
+                continue
+            for key in ("start", "end"):
+                if key in i and i[key] == b:
+                    i[key] = list(a)
+    return [i for i in items if id(i) not in drop and ("via" in i or i["start"] != i["end"])]
+
+
 def save():
     board = pcbnew.LoadBoard(route.PCB)
     items = []
@@ -41,6 +80,7 @@ def save():
     # (audit round 1 of rev 12 counted 12 zero-length and 2 duplicates)
     items = [i for i in items if "via" in i or i["start"] != i["end"]]
     items = list({json.dumps(i, sort_keys=True): i for i in items}.values())
+    items = tidy(items)
     items.sort(key=lambda i: (i["net"], "via" in i, json.dumps(i, sort_keys=True)))
     with open(JSON, "w") as f:
         f.write("[\n" + ",\n".join(json.dumps(i, sort_keys=True) for i in items) + "\n]\n")
@@ -55,7 +95,12 @@ def replay():
     route.via = lambda *a, **k: None       # thermal_vias for its pad zone connections only;
     route.thermal_vias(board)              # its vias are in routing.json
     route.via = real_via
-    for i in json.load(open(JSON)):
+    frozen = json.load(open(JSON))
+    short, dup = debris(frozen)
+    if short or dup:
+        sys.exit(f"routing.json has {len(short)} segments under {SHORT / 1e6} mm and {len(dup)} near-duplicates: "
+                 "replay, then run freeze.py save, which removes them")
+    for i in frozen:
         net = board.FindNet(i["net"])
         if net is None:
             sys.exit(f"routing.json names net {i['net']!r}, which the netlist no longer has")

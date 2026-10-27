@@ -21,13 +21,12 @@ the W5500/Qwiic headers, the reader current sense.
   figure 21: 10 uF in, 2x 22 uF out, 100 nF BST, 4.7 uH, EN tied to VIN, FB tied to VOUT.
   USB VBUS feeds the same buck through one SS34, so the board flashes and runs from the cable alone.
 - Part numbers reused from rev 10 wherever the cell is the same, so Basic parts stay Basic.
-- Diode pads: on the EasyEDA SMA footprints pad 1 = K (SS34, SMAJ18A C19077538 -- the same "-RD"
-  footprint family as rev 10's SMAJ15A; checked against the symbol and the silk band). The first
-  draft used SMAJ18A C499735 on the mirrored "-R-RD" footprint (pad 2 = K); swapped 2026-10-21 for
-  the Preferred part (no JLCPCB loading fee, 350x the stock). Verify polarised parts in the CPL
-  preview regardless.
+- Diode pads: on the EasyEDA SMA footprints pad 1 = K (SS34, SS56; checked against the symbol and
+  the silk band). D2 is bidirectional since rev 2 (SMAJ18CA, C19077539) on the same land without the
+  band. The first draft used SMAJ18A C499735 on the mirrored "-R-RD" footprint (pad 2 = K). Verify
+  polarised parts in the CPL preview regardless.
 - JLCPCB "Preferred" Extended parts carry no loading fee on Economic assembly (their FAQ, 2026-09):
-  the MMSZ5231B zeners and the SMAJ18A are Preferred. The other Extended parts (module, AP63203,
+  the MMSZ5231B zeners, the SMAJ18CA and the SS56 are Preferred. The other Extended parts (module, AP63203,
   LVC2G17, USB-C, inductor, PTC, terminal) have no Basic or Preferred equivalent in JLCPCB's
   library (searched 2026-10-21).
 - SW1/SW2 use pads 1 and 4 only: diagonal pads are always across the switch.
@@ -72,7 +71,9 @@ FP = {
     "soic8_thvd": (WB, "SOIC-8_L4.9-W3.9-P1.27-LS6.0-BL"),      # THVD1420DR (EasyEDA C3235215)
     "sot23_2n7002": (WB, "SOT-23-3_L2.9-W1.3-P1.90-LS2.4-BR"),
     "sma_ss34": (WB, "SMA_L4.3-W2.6-LS5.2-RD"),
+    "sma56": (WB, "SMA_L4.3-W2.6-LS5.0-RD"),                      # the full board's SS56 land
     "sma_tvs": (WB, "SMA_L4.3-W2.6-LS5.0-RD"),
+    "sma_tvs_bi": (WB, "SMA_L4.3-W2.6-LS5.0-BI"),                # the same land without the cathode band
     "sod123": (WB, "SOD-123_L2.8-W1.6-LS3.7-RD"),
     "led_r": (WB, "LED0805-R-RD"),
     "led": (WB, "LED0805-RD"),
@@ -93,7 +94,7 @@ FP = {
 
 # Passive part numbers (all JLCPCB Basic)
 R = {"100": "C22775", "1k": "C21190", "5.1k": "C23186", "10k": "C25804", "100k": "C25803",
-     "20k": "C4184", "120": "C22787", "470": "C23179", "10": "C22859"}
+     "20k": "C4184", "120": "C22787", "470": "C23179", "10": "C22859", "4.7k": "C23162", "1.5k": "C22843"}
 C = {"100p": ("c0603", "C14858"), "100n": ("c0603", "C14663"), "1u": ("c0603", "C15849"), "10n": ("c0603", "C57112"),
      "10u25": ("c0805", "C15850"), "22u25": ("c0805", "C45783"), "22u6": ("c0603", "C59461"),
      "10u50_1206": ("c1206", "C13585")}
@@ -119,8 +120,10 @@ part("J3", "term8", "12V GND D0 D1 LED BEEP A B", "C441177",
      {"1": "+VIN_RAW", "2": "GND", "3": "D0_RAW", "4": "D1_RAW", "5": "RDR_LED", "6": "RDR_BEEP",
       "7": "RS485_A", "8": "RS485_B"})   # mating plug KF2EDGK-3.5-8P, bought separately
 part("F1", "f1812", "0.5A 24V", "C516067", {"1": "+VIN_RAW", "2": "+VIN_F"})   # rev 10's reader fuse part
-part("D1", "sma_ss34", "SS34", "C8678", {"1": "+VIN", "2": "+VIN_F"})   # series reverse-polarity; 1 = K
-part("D2", "sma_tvs", "SMAJ18CA", "C19077539", {"1": "+VIN_F", "2": "GND"})   # rev 2: bidirectional, ahead of D1; 18 V standoff > 16 V max in; Preferred
+# rev 2 (audit round 2): in a negative surge D2 holds +VIN_F at -29 V while C1/C2 hold +VIN at up to
+# 16 V, 45 V across D1: the SS34's 40 V was short. The full board's SS56 (60 V, Preferred, no fee).
+part("D1", "sma56", "SS56", "C18199169", {"1": "+VIN", "2": "+VIN_F"})   # series reverse-polarity; 1 = K
+part("D2", "sma_tvs_bi", "SMAJ18CA", "C19077539", {"1": "+VIN_F", "2": "GND"})   # rev 2: bidirectional, ahead of D1; 18 V standoff > 16 V max in; Preferred
 cap("C1", "10u50_1206", "+VIN")   # rev 2: 1206 50 V, ~9 uF at 16 V
 
 # --- Block 2: buck to 3.3 V (AP63203, datasheet figure 21) ---------------------------------------
@@ -139,7 +142,10 @@ part("J1", "usbc", "USB-C", "C2765186",
      {"A1B12": "GND", "B1A12": "GND", "A4B9": "VBUS", "B4A9": "VBUS", "A5": "CC1", "B5": "CC2",
       "A6": "USB_DP", "B6": "USB_DP", "A7": "USB_DN", "B7": "USB_DN", "13": "GND", "14": "GND"})
 cap("C6", "10u25", "VBUS")
-res("R87", "100k", "VBUS", "GND")      # rev 2: bleeds D3's reverse leakage off an unplugged VBUS
+# rev 2: bleeds D3's reverse leakage off an unplugged VBUS. Round 2: 100k held VBUS low only below
+# ~45 C (typical); the SS34 is guaranteed only to 0.5 mA, and a Type-C source waits for VBUS < 0.8 V.
+# 1.5k: <= 0.75 V at 0.5 mA; 3.3 mA from USB.
+res("R87", "1.5k", "VBUS", "GND")
 res("R1", "5.1k", "CC1", "GND")
 res("R2", "5.1k", "CC2", "GND")
 part("D3", "sma_ss34", "SS34", "C8678", {"1": "+VIN", "2": "VBUS"})   # 4.6 V into the buck (min 3.8); off when 12 V is present
@@ -200,7 +206,12 @@ for raw, node, tx, rs, z, c, rp, q, rg, rgd in CELLS:
     part(q, "sot23_2n7002", "AO3400A", "C20917", {"1": gate, "2": "GND", "3": raw})   # rev 2: on at 3.3 V
 # rev 2: the pull-ups' supply, so a powered reader cannot back-feed a dead +3V3 through them
 part("D26", "sot23_bat54", "BAT54", "C22466368", {"1": "+3V3", "3": "+3V3_PU"})
-cap("C46", "100n", "+3V3_PU")
+# rev 2 (audit round 2, S1): D26 sources but cannot sink, so a reader's own 5 V pull-ups (or a
+# controller's 12 V) lifted +3V3_PU to ~4.9 V through each cell's 1k + 10k, and C46 held it through a
+# 50 us pulse: the buffer node then needed the reader at <= ~0.4 V. R95 4.7k (in C46's land; C46
+# removed) holds the rail at 2.96-3.34 V: a reader's VOL may be up to 0.54 V (0.46 V with a 12 V/1k
+# controller), for 0.7 mA.
+res("R95", "4.7k", "+3V3_PU", "GND")
 
 # --- Block 6: RS-485 / OSDP on UART0 (rev 10 block 14, less the bias network) ----------------------
 # rev 2: THVD1420, full fail-safe receiver, so no bias resistors are needed on this node

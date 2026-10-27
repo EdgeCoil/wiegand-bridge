@@ -93,7 +93,7 @@ at("R75", 137.2, 127.0, 0)
 at("C37", 140.2, 127.0, 0)
 at("D26", 139.0, 129.4, 0)      # rev 2: BAT54 feeding the line pull-ups, where the bias pair was
 # --- rev 2 audit round 1: the new band (y 128.5-131.5) ---------------------------------------------
-at("C46", 136.4, 129.6, 90)     # +3V3_PU decoupling, beside D26
+at("R95", 136.4, 129.6, 90)     # rev 2 round 2: +3V3_PU bleed, in C46's land (C46 removed)
 at("R87", 140.3, 132.4, 90)     # VBUS bleed, its VBUS pad (1, lower) just above D3's VBUS pad
 at("R88", 133.0, 129.9, 90)     # RS-485 surge resistors, above U9
 at("R89", 134.5, 129.9, 90)

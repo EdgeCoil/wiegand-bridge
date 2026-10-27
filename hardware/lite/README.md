@@ -65,14 +65,14 @@ left unconnected; re-run it from `build_pcb.py` until it exits 0.
 **Space parts by pad extents, not courtyards.** KiCad's 0603 courtyard is 3.0 × 1.5 mm (generous)
 while the EasyEDA footprints' courtyards stop short of their pad ends (the SMA, SOT-23 and TSOT pads
 run up to 0.9 mm past them), so a courtyard check passed three placements whose pads overlapped and
-whose routes failed on exactly those pads. `padgap.py` is the check; the 10 remaining
+whose routes failed on exactly those pads. `padgap.py` is the check; the 12 remaining
 `courtyards_overlap` DRC warnings between cell passives are accepted (pads ≥ 0.25 mm apart).
 `route.py` also pre-routes the USB-C's VBUS pad pair, which Freerouting never joins.
 
 ## Ordering at JLCPCB
 
 Upload `fab/wiegand-bridge-lite-gerbers.zip`, choose PCB Assembly (top side), then upload the BOM
-and CPL. **Check every polarised part's rotation in the CPL previewer** — the three LEDs, the four
-diodes (pad 1 = cathode on every SMA and SOD-123 part), the ICs, the module, the
+and CPL. **Check every polarised part's rotation in the CPL previewer** — the three LEDs, the
+diodes (pad 1 = cathode on every SMA and SOD-123 part, except D2, which is bidirectional), the ICs, the module, the
 USB-C. The terminal J3 is through-hole: either add JLCPCB's THT assembly or leave it off the BOM
 and solder it by hand. The mating plug (KF2EDGK-3.5-8P) is not on the BOM; buy it separately.

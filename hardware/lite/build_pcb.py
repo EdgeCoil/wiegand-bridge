@@ -251,6 +251,7 @@ def main():
     antenna_keepout(board)
     j1_shell_keepout(board)
     pcbnew.SaveBoard(OUT, board)
+    write_dru()
     print("saved", OUT, len(PARTS), "footprints", len(nets), "nets")
 
 
@@ -261,6 +262,14 @@ def main():
 # pads (their tops are at y = 100.97), the module's full width plus 1 mm each side. Found missing
 # in the 2026-10-21 audit -- the plan called for it and the ground pours ran to the edge.
 ANTENNA_KEEPOUT_DEPTH = 0.95     # mm below the top edge; pads 46-60 start at 0.97
+
+
+def write_dru():
+    """rev 2 (audit round 2): pour held 0.4 mm off through-hole pads (J3's surge-exposed pins were at
+    0.255 mm), as on the full board. The zone filler and kicad-cli DRC both honour it."""
+    open(os.path.join(os.path.dirname(OUT), "wiegand-bridge-lite.kicad_dru"), "w").write(
+        '(version 1)\n(rule "tht_pin_pour"\n  (condition "A.Type == \'Pad\' && A.Pad_Type == \'Through-hole\' && B.Type == \'Zone\'")\n'
+        '  (constraint clearance (min 0.4mm)))\n')
 
 
 def j1_shell_keepout(board):

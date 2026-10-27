@@ -41,15 +41,16 @@ credentials to Home Assistant as events and has no output toward a lock.
 | **C1/C2 1206 50 V** (C13585) replace the 0805 25 V parts | The 0805s held 40–55 % of 10 µF at 12–16 V bias |
 | **R86** 1 kΩ between U3's RESET and EN | U3 discharged C13 (1 µF) unlimited: ~35 mA against its 5 mA absolute maximum. EN low is now 0.30 V |
 | **C45** 10 nF on MR | 28 mm of route beside other signals, into an input that reacts to ~1 ns pulses |
-| **C46** 100 nF on `+3V3_PU` | 59 mm of 0.2 mm track fed through the BAT54 |
-| **R87** 100 kΩ on VBUS | D3's reverse leakage charged an unplugged VBUS toward +VIN |
-| **R88/R89** 10 Ω, pulse-proof (C844519) between the SM712 and U9's A/B | The SM712 clamps above the THVD1420's ±16 V (TI's surge reference circuit) |
+| **R95** 4.7 kΩ from `+3V3_PU` to GND (in round 1's C46 land; C46 removed) | D26 can't sink, so a reader's own 5 V pull-ups lifted the rail to ~4.9 V and the line's low level with it (audit round 2) |
+| **R87** 1.5 kΩ on VBUS | D3's reverse leakage charged an unplugged VBUS toward +VIN; a Type-C source waits for VBUS under 0.8 V (100 kΩ in round 1 held it only below ~45 °C) |
+| **D1 SS56** (60 V, C18199169, Preferred) replaces the SS34 | In a negative surge D2 holds +VIN_F at −29 V while the input capacitors hold +VIN at up to 16 V: 45 V across D1 |
+| **R88/R89** 10 Ω, pulse-proof (C844519) between the SM712 and U9's A/B | The SM712 clamps above the THVD1420's ±16 V (TI's surge reference circuit). They cost drive: about 1.24 V on a doubly terminated bus at 3.3 V, under TIA-485's 1.5 V; receivers need 0.2 V, so a bus of fail-safe nodes is fine |
 | **D2 SMAJ18CA** (C19077539, bidirectional) on +VIN_F, ahead of D1 | A negative surge meets the TVS rather than D1's 40 V reverse rating; a reversed 12 V supply is still blocked by D1 |
 | **R3/R81** 470 Ω | The green LEDs' Vf (up to 3.1 V) left 0.3–0.7 mA through 1 kΩ |
 | Two GND vias and an F.Cu link from U2's GND pin to C2's | The buck's input loop closed through single vias |
 | A top-layer track keep-out under J1's shell | RS485_RO had run 9.5 mm there; `verify.py` now checks it |
 
-The board grew 3 mm in a band below the line cells, which holds R86, C45, C46 and R88/R89. U3 sits
+The board grew 3 mm in a band below the line cells, which holds R86, C45, R95 and R88/R89. U3 sits
 at the bottom right, between D19 and U9, because the column beside the module's EN parts holds the
 status LEDs' labels. EN and the button line are slow signals, routed in from there.
 
@@ -79,11 +80,14 @@ wire ──┬── SM712 (one per pair) ── GND
 - The drive FET is an AO3400A since rev 2 (rev 1's 2N7002 was specified at a 5 V gate, and at
   3.3 V with its worst-case 2.5 V threshold sank only ~15–20 mA).
 - The 10k pull-ups hang off `+3V3_PU`, fed from 3.3 V through D26 (BAT54), so the idle-high node
-  sits a diode drop below 3.3 V, still well above the buffer's 2.0 V threshold.
-- **The reader's output must pull a line to 0.55 V or lower** (at about 0.3 mA). The buffer node sits
-  at the reader's low level plus 1/11 of the rest of the 3.2 V, and the 74LVC2G17's low threshold can
-  be as low as 0.8 V. Open-collector and open-drain readers meet this; check a reader with a series
-  resistor in its outputs.
+  sits a diode drop below 3.3 V (about 2.95 V), still well above the buffer's 2.0 V threshold. D26
+  can't sink current, so R95 (4.7 kΩ) holds the rail down when the far end has pull-ups of its own.
+- **The reader's output must pull a line to 0.53 V or lower** (at about 0.3 mA; 0.46 V where a
+  controller's 12 V/1k pull-ups are also on the line). The buffer node sits at the reader's low level
+  plus 1/11 of the difference to the rail, and the 74LVC2G17's low threshold can be as low as 0.8 V.
+  Simulated (audit round 2's deck, with R95 and without C46) with a reader holding 5 V/1k pull-ups on
+  D0/D1: limit 0.536 V; nothing else attached: 0.582 V. Open-collector and open-drain readers meet
+  this; check a reader with a series resistor in its outputs.
 
 ESPHome has no Wiegand transmitter, so `wiegand_tx` bit-bangs one in a lambda: 50 µs low per bit,
 2 ms between bits, a 1 on D1 and a 0 on D0. `wiegand_send_26` builds the standard 26-bit frame
@@ -101,20 +105,22 @@ frames are at most 31 bits.
 
 - **8–16 V in**, terminal pins 1–2: 0.5 A hold / 1 A trip 24 V PTC, then D2, an SMAJ18CA
   (bidirectional, 18 V standoff each way; clamp 29 V at 13.7 A, under the AP63203's 35 V absolute
-  maximum). Then the SS34 in series for reverse polarity: a reversed 12 V supply sits under D2's
-  standoff and is blocked by D1. Then 10 µF (1206, 50 V).
+  maximum). Then the SS56 (60 V) in series for reverse polarity: a reversed 12 V supply sits under D2's
+  standoff and is blocked by D1, and a negative surge clamped at −29 V puts at most 45 V across it. Then 10 µF (1206, 50 V).
 - **Do not wire it to a 24 V supply** (common in access control). D2 conducts from about 20 V, and
   the PTC is rated 24 V, so a 24 V supply heats D2 until the PTC trips and can then exceed the PTC's
   rating.
-- **AP63203** (fixed 3.3 V, 3.8–32 V in, 2 A, TSOT-26) as its datasheet's typical circuit: 10 µF
-  in, 2 × 22 µF out, 100 nF bootstrap, 4.7 µH (3 A rated, 3.9 A saturation), EN tied to VIN (the
+- **AP63203** (fixed 3.3 V, 3.8–32 V in, 2 A, TSOT-26) close to its datasheet's typical circuit: 10 µF
+  in, 2 × 22 µF out, 100 nF bootstrap, 4.7 µH (3 A rated, 3.9 A saturation; Table 2 gives 3.9 µH, and
+  4.7 µH is inside its 2.2–10 µH range), EN tied to VIN (the
   datasheet allows it directly; EN's absolute maximum is 35 V), FB tied to VOUT. The part is
   flagged "not recommended for new designs" at LCSC; check stock before ordering. Fallback: the
   full board's LMR16020 at 3.3 V. The input capacitors are the full board's 1206 50 V part
   (C13585) since rev 2; rev 1's 0805 25 V parts held only 40–55 % of 10 µF at 12–16 V.
 - **USB-C VBUS → SS34 → the buck input.** With 12 V present the diode is reverse-biased; from USB
   alone the buck sees 4.6 V (minimum 3.8). No ESD part on D+/D− (the port is inside the enclosure).
-  R87 (100 kΩ) bleeds D3's reverse leakage off VBUS when no cable is attached. On USB alone the host
+  R87 (1.5 kΩ) bleeds D3's reverse leakage off VBUS when no cable is attached: at the SS34's
+  guaranteed 0.5 mA that is 0.75 V, under the 0.8 V a Type-C source waits for before it attaches. On USB alone the host
   sees C6 plus the buck's input capacitors (about 26 µF effective), more than USB 2.0's 10 µF:
   that's fine for bench use from a PC or a USB charger, but don't hot-plug it into a hub port that
   enforces inrush limits.

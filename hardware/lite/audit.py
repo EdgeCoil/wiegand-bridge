@@ -196,3 +196,50 @@ for t in board.GetTracks():          # the track itself, not its bounding box (r
 print(f"   tracks in {ant}: {sorted(hits) or 'none'}  (the strip under the antenna is a keep-out: verify.py 11)")
 
 silk_audit()
+
+# Lite rev 2 (from the full board's audit round 3, where a re-route ran a GPIO 0.205 mm past six
+# field-terminal pins). Every through-hole pin JLC solders (a part with an LCSC number)
+# must have other-net tracks, vias and other parts' pads >= THT_GAP away; the pour is held off by the
+# .kicad_dru rule. Polygon test, not SHAPE.GetClearance (which reports a gap for overlapping shapes).
+THT_GAP = 0.4
+# Accepted (Lite audit round 3 to judge): J1's rear shell legs sit 0.31-0.38 mm from the module's
+# bottom-edge pads U1.25-27 (IO21/IO47 LED sinks, U1.26 open), fixed since rev 1 by where the antenna
+# edge and the USB-C both have to be. Held to that measured floor instead of THT_GAP.
+THT_ALLOW = {("J1", "14", "U1"): 0.30}
+print(f"\n== 7. other-net copper within {THT_GAP} mm of a JLC-soldered through-hole pin")
+tht_bad = 0
+others = [t for t in board.GetTracks()] + [p for p in board.GetPads()]
+for fp in board.GetFootprints():
+    if not (fp.HasFieldByName("LCSC") and fp.GetFieldText("LCSC")):
+        continue
+    for pad in fp.Pads():
+        if not pad.HasHole():
+            continue
+        for L in (pcbnew.F_Cu, pcbnew.B_Cu):
+            grown = pcbnew.SHAPE_POLY_SET()
+            pad.TransformShapeToPolygon(grown, L, pcbnew.FromMM(THT_GAP - 0.01), pcbnew.FromMM(0.005),   # 10 um: polygon error
+                                       pcbnew.ERROR_OUTSIDE)
+            floors = {o: pcbnew.SHAPE_POLY_SET() for (r, n, o), g in THT_ALLOW.items() if (r, n) == (fp.GetReference(), pad.GetNumber())}
+            for (r, n, o), g in THT_ALLOW.items():
+                if o in floors:
+                    pad.TransformShapeToPolygon(floors[o], L, pcbnew.FromMM(g), pcbnew.FromMM(0.005), pcbnew.ERROR_OUTSIDE)
+            box = pad.GetBoundingBox().GetInflated(pcbnew.FromMM(THT_GAP + 1))
+            for o in others:
+                if (o.GetNetCode() == pad.GetNetCode() and pad.GetNetCode() > 0) or not o.IsOnLayer(L):
+                    continue
+                if isinstance(o, pcbnew.PAD) and o.GetParentFootprint() == fp:
+                    continue
+                if not o.GetBoundingBox().Intersects(box):
+                    continue
+                poly = pcbnew.SHAPE_POLY_SET()
+                o.TransformShapeToPolygon(poly, L, 0, pcbnew.FromMM(0.005), pcbnew.ERROR_INSIDE)
+                oref = o.GetParentFootprint().GetReference() if isinstance(o, pcbnew.PAD) else None
+                poly.BooleanIntersection(floors.get(oref, grown))
+                if poly.Area() > 0:
+                    tht_bad += 1
+                    what = (f"{o.GetParentFootprint().GetReference()}.{o.GetNumber()}" if isinstance(o, pcbnew.PAD)
+                            else "via" if o.GetClass() == "PCB_VIA" else "track")
+                    print(f"   THT CLEARANCE {fp.GetReference()}.{pad.GetNumber()} ({pad.GetNetname()}) "
+                          f"{board.GetLayerName(L)}: {what} [{o.GetNetname()}]")
+print(f"   {tht_bad} problems")
+sys.exit(1 if tht_bad else 0)

@@ -48,6 +48,7 @@ FP = {
     "sot23_ao3401": (WB, "SOT-23_L2.9-W1.3-P1.90-LS2.4-BR"),
     "sma_ss34": (WB, "SMA_L4.3-W2.6-LS5.2-RD"),
     "sma_tvs": (WB, "SMA_L4.3-W2.6-LS5.0-RD"),
+    "sma_tvs_bi": (WB, "SMA_L4.3-W2.6-LS5.0-BI"),                # the same land without the cathode band
     "sod123": (WB, "SOD-123_L2.8-W1.6-LS3.7-RD"),
     "led_r": (WB, "LED0805-R-RD"),
     "led": (WB, "LED0805-RD"),
@@ -125,7 +126,7 @@ part("J2", "kf128", "6-36V IN", "C474952", {"1": "+VIN_RAW", "2": "GND"})
 part("J14", "dcjack", "DC IN", None, {"4": "+VIN_RAW", "3": "GND", "2": "GND"})  # 4 = centre pin (+); 2 = plug switch
 part("F2", "f2920", "2A 60V", "C49326266", {"1": "+VIN_RAW", "2": "+VIN_F"})   # 2 A hold: ~1.05 A at 6 V in, derated warm
 part("D1", "sma56", "SS56", "C18199169", {"1": "+VIN", "2": "+VIN_F"})
-part("D2", "sma_tvs", "SMAJ36CA", "C19077551", {"1": "+VIN", "2": "GND"})  # bidirectional
+part("D2", "sma_tvs_bi", "SMAJ36CA", "C19077551", {"1": "+VIN", "2": "GND"})  # bidirectional: no band
 for r in ("C31", "C32", "C33"):   # the guide's C1a-c
     cap(r, "10u50_1206", "+VIN")
 
