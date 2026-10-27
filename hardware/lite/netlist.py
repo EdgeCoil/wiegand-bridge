@@ -180,7 +180,7 @@ part("U3", "sot6br", "TPS3808G30", "C189211",
 cap("C44", "100n", "+3V3")
 res("R86", "1k", "U3_RST", "EN")       # limits U3's discharge of C13 (5 mA abs max on RESET)
 cap("C45", "10n", "RST_MR")            # MR filter
-part("SW2", "tact", "RESET", "C318884", {"1": "RST_MR", "4": "GND"})   # MR has a 90k internal pull-up
+part("SW2", "tact", "RESET", "C318884", {"1": "RST_MR", "4": "GND"})   # MR has an internal pull-up (>= 70k, 90k typical)
 res("R5", "10k", "+3V3", "IO0")
 part("SW1", "tact", "BOOT", "C318884", {"1": "IO0", "4": "GND"})
 res("R8", "1k", "IO21", "D8_K")

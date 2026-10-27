@@ -37,7 +37,7 @@ credentials to Home Assistant as events and has no output toward a lock.
 | **U9 THVD1420** (C3235215) replaces the SP3485; the 20k bias pair R66/R67 is gone | Its receiver has full fail-safe: an idle, open or shorted bus reads as a 1. Rev 1's weak bias gave ~10 mV with the termination fitted, so an idle terminated bus was undefined |
 | **U3 TPS3808G30** (C189211) on EN; SW2 moves to its MR input | Open-drain, holds EN low until +3V3 passes 2.79 V, then 20 ms more (CT open). A start from a slow or pre-biased rail is defined, and the button is debounced |
 | **Q1–Q4 AO3400A** (C20917, Basic) replace the 2N7002s | Fully on at a 3.3 V gate: the 2N7002's 2.5 V worst-case threshold left ~15–20 mA, marginal for a controller's 1k pull-up to 12 V |
-| **D26 BAT54** (C22466368, Preferred) feeds the four line pull-ups (`+3V3_PU`) | A reader powered while the board is not no longer back-feeds the dead 3.3 V rail through each line's 1k + 10k |
+| **D26 BAT54** (C22466368, Preferred) feeds the four line pull-ups (`+3V3_PU`) | A reader powered while the board is not no longer back-feeds the dead 3.3 V rail through each line's 1k + pull-up (10k then) |
 | **C1/C2 1206 50 V** (C13585) replace the 0805 25 V parts | The 0805s held 40–55 % of 10 µF at 12–16 V bias |
 | **R86** 1 kΩ between U3's RESET and EN | U3 discharged C13 (1 µF) unlimited: ~35 mA against its 5 mA absolute maximum. EN low is now ≤ 0.71 V on guaranteed figures (U3's 0.4 V VOL plus R86's share), against the ESP32's 0.81 V |
 | **C45** 10 nF on MR | 28 mm of route beside other signals, into an input that reacts to ~1 ns pulses |
@@ -80,9 +80,11 @@ wire ──┬── SM712 (one per pair) ── GND
 - The drive FET is an AO3400A since rev 2 (rev 1's 2N7002 was specified at a 5 V gate, and at
   3.3 V with its worst-case 2.5 V threshold sank only ~15–20 mA).
 - The 22k pull-ups hang off `+3V3_PU`, fed from 3.3 V through D26 (BAT54), so the idle-high node
-  sits a diode drop below 3.3 V (about 2.95 V), still well above the buffer's 2.0 V threshold. D26
+  sits a diode drop below 3.3 V (about 2.85–3.0 V over temperature), above the buffer's high
+  threshold of at most about 2.2 V (VT+ scaled to its supply; see below). D26
   can't sink current, so R95 (4.7 kΩ) holds the rail down when the far end has pull-ups of its own.
-- **The reader's output must pull a line to 0.65 V or lower at the terminal** (at about 0.14 mA).
+- **The reader's output must pull a line to 0.65 V or lower at the terminal** (at about 0.14 mA), and
+  so must a controller's LED/BEEP outputs in emulation mode: they drive the same cell.
   The buffer node sits at the line's low level plus 1/23 of the difference to the rail, and the
   74LVC2G17's low threshold can be as low as 0.8 V. With the rail at its highest (+3V3 at 3.36 V and
   no drop across D26 at all) the bound is (0.8 × 23 − 3.36) / 22 = 0.684 V, whatever else is on the
@@ -91,12 +93,15 @@ wire ──┬── SM712 (one per pair) ── GND
   (Round 2 quoted 0.53 V from the most favourable corner, with 10 kΩ pull-ups.)
 - **Idle-high against leakage.** The datasheet maxima on each node add to about 12 µA at 25 °C (LVC
   input 5 µA, MMSZ5231B 5 µA at 2 V, AO3400A 1 µA, SM712 1 µA; 16 µA with the AO3400A's 55 °C
-  figure; nothing hot is given for the zener or the SM712). The buffer's high threshold scales with
+  figure; nothing hot is given for the zener or the SM712, and the zener's 5 µA is specified at 2 V
+  while the node idles at 2.5–3.0 V, which the room below still covers about twice over). The buffer's high threshold scales with
   its supply: about 2.18 V at 3.24 V. The 22k pull-up leaves room for about 31–38 µA per node
   (simulated, audit round 4: 2.49 V at −40 °C with 16 µA); the old 10k left about 85 µA.
 - **Cable length.** The line rises through 23 kΩ: about 15 µs on the board alone, 0.16 ms with 5 nF
   of cable. For a reader without pull-ups of its own, keep cable capacitance under about 6 nF for
-  SIA's shortest 200 µs pulse interval, or about 30 nF for the usual 1 ms. A reader with its own
+  SIA's shortest 200 µs pulse interval, or about 30 nF for the usual 1 ms. That takes the interval as
+  the high time between pulses; if a reader counts it start to start with 100 µs pulses, the high
+  time halves and so does the limit (about 2.5–3 nF, roughly 20 m of typical cable). A reader with its own
   pull-ups (most open-collector readers have 1k–10k to 5 V) is not limited by this.
 
 ESPHome has no Wiegand transmitter, so `wiegand_tx` bit-bangs one in a lambda: 50 µs low per bit,
@@ -142,10 +147,15 @@ frames are at most 31 bits.
 - **Back-feed when the reader is powered and the board is not** (the full board never had this
   case, because it powered the reader): in rev 1 the reader's 5 V pull-ups reached the dead 3.3 V
   rail through each cell's 1k + pull-up (10k then), and the module could start from a pre-biased rail. Rev 2
-  blocks that path with D26 and, separately, holds EN low until the rail is good (U3).
+  blocks that path with D26 and, separately, holds EN low until the rail passes U3's
+  threshold (U3).
 - **Reset:** U3 TPS3808G30 drives EN through R86 1 kΩ (open drain, R4 10k pull-up, C13 1 µF kept):
-  EN is released 12–28 ms after +3V3 passes 2.79 V. SW2 (RESET) pulls U3's MR input, which has its own
-  70–90k pull-up and C45 10 nF against noise.
+  EN is released 12–28 ms after +3V3 passes 2.79 V (2.755–2.825 V). That is below the module's 3.0 V
+  minimum: in normal running the rail is 3.27–3.33 V, but on a slowly collapsing input the buck runs
+  down to about 2.9 V in, and +3V3 can sit at 2.83–3.0 V with EN released, where only the ESP32's own
+  brown-out detector acts. The G33 version (3.11 V) would sit too close to the buck's 3.27 V minimum.
+  SW2 (RESET) pulls U3's MR input, which has its own pull-up (≥ 70 kΩ, 90 kΩ typical) and C45 10 nF
+  against noise.
 
 ## Pin map
 
@@ -230,8 +240,9 @@ drawing the body stands about 0.1 mm past the edge, and its courtyard 0.23 mm.
 - JLCPCB classes (2026-10-21): fee-bearing Extended = the module, AP63203, the LVC2G17s, the PTC,
   the inductor, the USB-C and the terminal (7 types; no Basic or Preferred equivalents exist in
   JLCPCB's library for any of them); Preferred (no loading fee) = the zeners and the SMAJ18A; Basic =
-  everything else, including the SM712s. Rev 2 adds two fee-bearing Extended types (THVD1420,
-  TPS3808G30), about US$6 more per order; the BAT54 is Preferred and the AO3400A Basic.
+  everything else, including the SM712s. Rev 2 adds three fee-bearing Extended types (THVD1420,
+  TPS3808G30 and the pulse-proof 10 Ω), about US$9 more per order (see Results, revision 2); the
+  BAT54 is Preferred and the AO3400A Basic.
 - Cost, JLCPCB Economic assembly, parts at the lowest tier: about US$9.45 of parts per board (the
   module is US$5), US$21 of Extended fees and US$9.50 set-up and stencil per order, plus the PCB,
   252 SMT joints per board and shipping (assumed ~US$20): roughly **US$125 for five boards,
