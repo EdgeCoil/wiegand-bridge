@@ -81,7 +81,8 @@ wire ──┬── SM712 (one per pair) ── GND
   3.3 V with its worst-case 2.5 V threshold sank only ~15–20 mA).
 - The 22k pull-ups hang off `+3V3_PU`, fed from 3.3 V through D26 (BAT54), so the idle-high node
   sits a diode drop below 3.3 V (about 2.85–3.0 V over temperature), above the buffer's high
-  threshold of at most about 2.2 V (VT+ scaled to its supply; see below). D26
+  threshold of at most about 2.2–2.3 V (VT+ scaled to its supply: 2.18 V at 3.24 V, 2.26 V at 3.36 V,
+  where the node sits correspondingly higher; see below). D26
   can't sink current, so R95 (4.7 kΩ) holds the rail down when the far end has pull-ups of its own.
 - **The reader's output must pull a line to 0.65 V or lower at the terminal** (at about 0.14 mA), and
   so must a controller's LED/BEEP outputs in emulation mode: they drive the same cell.
@@ -98,11 +99,13 @@ wire ──┬── SM712 (one per pair) ── GND
   its supply: about 2.18 V at 3.24 V. The 22k pull-up leaves room for about 31–38 µA per node
   (simulated, audit round 4: 2.49 V at −40 °C with 16 µA); the old 10k left about 85 µA.
 - **Cable length.** The line rises through 23 kΩ: about 15 µs on the board alone, 0.16 ms with 5 nF
-  of cable. For a reader without pull-ups of its own, keep cable capacitance under about 6 nF for
-  SIA's shortest 200 µs pulse interval, or about 30 nF for the usual 1 ms. That takes the interval as
-  the high time between pulses; if a reader counts it start to start with 100 µs pulses, the high
-  time halves and so does the limit (about 2.5–3 nF, roughly 20 m of typical cable). A reader with its own
-  pull-ups (most open-collector readers have 1k–10k to 5 V) is not limited by this.
+  of cable. For a reader without pull-ups of its own, keep cable capacitance under about 4 nF for
+  SIA's shortest 200 µs pulse interval (about 6 nF with negligible leakage on the node; 4 nF allows
+  the datasheet-maximum 16 µA), or about 30 nF for the usual 1 ms. That takes the interval as the
+  high time between pulses; if a reader counts it start to start with 100 µs pulses, the high time
+  halves and so does the limit (about 2 nF at 16 µA, 2.9 nF with none: roughly 15–20 m of typical
+  cable; audit round 6). A reader with its own pull-ups (most open-collector readers have 1k–10k to
+  5 V) is not limited by this.
 
 ESPHome has no Wiegand transmitter, so `wiegand_tx` bit-bangs one in a lambda: 50 µs low per bit,
 2 ms between bits, a 1 on D1 and a 0 on D0. `wiegand_send_26` builds the standard 26-bit frame
@@ -150,10 +153,13 @@ frames are at most 31 bits.
   blocks that path with D26 and, separately, holds EN low until the rail passes U3's
   threshold (U3).
 - **Reset:** U3 TPS3808G30 drives EN through R86 1 kΩ (open drain, R4 10k pull-up, C13 1 µF kept):
-  EN is released 12–28 ms after +3V3 passes 2.79 V (2.755–2.825 V). That is below the module's 3.0 V
-  minimum: in normal running the rail is 3.27–3.33 V, but on a slowly collapsing input the buck runs
-  down to about 2.9 V in, and +3V3 can sit at 2.83–3.0 V with EN released, where only the ESP32's own
-  brown-out detector acts. The G33 version (3.11 V) would sit too close to the buck's 3.27 V minimum.
+  EN is released 12–28 ms after +3V3 rises past 2.755–2.90 V (VIT 2.79 V ±1.25 %, plus up to 2.5 %
+  hysteresis), and pulled low again when it falls below 2.755–2.825 V. That is below the module's
+  3.0 V minimum: in normal running the rail is 3.24–3.36 V (3.27–3.33 V is the buck's CCM regulation
+  limit; at light load it runs in PFM), but on a slowly collapsing input the buck runs down to about
+  2.9 V in, and +3V3 can sit at 2.83–3.0 V with EN released, where only the ESP32's own brown-out
+  detector acts. The G33 version (3.07 V nominal, releasing at up to about 3.18 V) would sit too close
+  to the buck's 3.27 V minimum.
   SW2 (RESET) pulls U3's MR input, which has its own pull-up (≥ 70 kΩ, 90 kΩ typical) and C45 10 nF
   against noise.
 
