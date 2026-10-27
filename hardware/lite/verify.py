@@ -222,7 +222,7 @@ for pin in ("3", "4", "5", "6"):
         rg = [r for r, p in nets[gate] if byref[r][2] == "100"][0]
         tx = [n for n in byref[rg][4].values() if n != gate][0]
         zener = [r for r, p in nets[node] if r.startswith("D")][0]
-        pull = [r for r, p in nets[node] if byref[r][2] == "10k"][0]
+        pull = [r for r, p in nets[node] if r.startswith("R") and "+3V3_PU" in byref[r][4].values()][0]   # by its rail, not its value
         print(f"   J3.{pin} {raw:9} -{rs}-> {node:8} ({zener}, {pull}) -> {bref}.{bpad} -> {gpio_net:8}; drive {q} <- {rg} <- {tx}; surge {sm}")
         assert io2net[[k for k, v in io2net.items() if v == gpio_net][0]] == gpio_net
         assert tx in io2net.values()

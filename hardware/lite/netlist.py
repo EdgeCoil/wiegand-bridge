@@ -94,7 +94,8 @@ FP = {
 
 # Passive part numbers (all JLCPCB Basic)
 R = {"100": "C22775", "1k": "C21190", "5.1k": "C23186", "10k": "C25804", "100k": "C25803",
-     "20k": "C4184", "120": "C22787", "470": "C23179", "10": "C22859", "4.7k": "C23162", "1.5k": "C22843"}
+     "20k": "C4184", "120": "C22787", "470": "C23179", "10": "C22859", "4.7k": "C23162", "1.5k": "C22843",
+     "22k": "C31850"}
 C = {"100p": ("c0603", "C14858"), "100n": ("c0603", "C14663"), "1u": ("c0603", "C15849"), "10n": ("c0603", "C57112"),
      "10u25": ("c0805", "C15850"), "22u25": ("c0805", "C45783"), "22u6": ("c0603", "C59461"),
      "10u50_1206": ("c1206", "C13585")}
@@ -199,7 +200,9 @@ for raw, node, tx, rs, z, c, rp, q, rg, rgd in CELLS:
     res(rs, "1k", raw, node)
     part(z, "sod123", "MMSZ5231B", "C19077422", {"1": node, "2": "GND"})  # 1 = K
     cap(c, "100p", node)
-    res(rp, "10k", "+3V3_PU", node)
+    # rev 2 (audit round 3): 22k, was 10k. The buffer node is the reader's VOL plus 1/23 (was 1/11) of
+    # the difference to the rail, so the reader's low level has ~0.14 V more room (see R95 below).
+    res(rp, "22k", "+3V3_PU", node)
     gate = q + "_G"
     res(rg, "100", tx, gate)
     res(rgd, "100k", gate, "GND")
@@ -209,8 +212,10 @@ part("D26", "sot23_bat54", "BAT54", "C22466368", {"1": "+3V3", "3": "+3V3_PU"})
 # rev 2 (audit round 2, S1): D26 sources but cannot sink, so a reader's own 5 V pull-ups (or a
 # controller's 12 V) lifted +3V3_PU to ~4.9 V through each cell's 1k + 10k, and C46 held it through a
 # 50 us pulse: the buffer node then needed the reader at <= ~0.4 V. R95 4.7k (in C46's land; C46
-# removed) holds the rail at 2.96-3.34 V: a reader's VOL may be up to 0.54 V (0.46 V with a 12 V/1k
-# controller), for 0.7 mA.
+# removed) holds the rail down, for 0.7 mA. Worst case over -40..85 C (+3V3 3.24-3.36 V, D26's VF from
+# its maximum to 35 mV under, LVC VT- 0.80 V, 10 uA leakage on each node; audit round 3's deck), with
+# the 22k pull-ups: a reader's VOL may be up to 0.65 V (0.58 V with a controller's 12 V/1k on the
+# line); idle-high >= 2.62 V against VT+ <= 2.0 V.
 res("R95", "4.7k", "+3V3_PU", "GND")
 
 # --- Block 6: RS-485 / OSDP on UART0 (rev 10 block 14, less the bias network) ----------------------
