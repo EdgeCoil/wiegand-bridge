@@ -27,7 +27,8 @@ with two blocks redrawn around integrated parts, from a passive-to-IC audit:
   USB-UART on the test pads can override it.
 - **Also, from the review of rev 12:** IN1–IN4 have reverse clamps (D28–D31), 10 kΩ (R90–R93)
   between each isolator FET and its GPIO, and 4.7 kΩ pulse-proof series resistors with 47 kΩ pull-ups,
-  so a sustained −24 V miswire stays within every part's rating. R94 bleeds an unplugged USB VBUS.
+  so a sustained −36 V miswire stays within every part's rating but the GPIO's. R94 bleeds an
+  unplugged USB VBUS.
   The green LEDs have 470 Ω resistors. No copper runs under an M3 screw head on the outer layers. The
   ground pour is held 0.4 mm off through-hole pins, and no other-net copper comes within 0.4 mm of a
   through-hole pin JLC solders (audit.py checks it).
@@ -114,9 +115,10 @@ Keep the logger at `INFO` in service. At `DEBUG`, ESPHome logs the Wiegand frame
 - **U2 LMR16020** (60 V buck) makes `+5V_BUCK`. A wide input range means the board doesn't care about
   cable drop or a sagging shared supply; its PGOOD goes to the expander.
 - **`+5V_BUCK` and USB `VBUS` are diode-ORed** (D3, D4), so neither back-feeds the other, including a
-  laptop during first flash. R94 (1.5 kΩ) loads VBUS so D4's reverse leakage can't hold an unplugged
-  VBUS up: a Type-C host waits for VBUS under 0.8 V before it attaches. The SS34's guaranteed 0.5 mA
-  gives at most 0.75 V; R94 draws 3.3 mA on USB.
+  laptop during first flash. R94 (1 kΩ) loads VBUS so D4's reverse leakage can't hold an unplugged
+  VBUS up: a Type-C host waits for VBUS under 0.8 V before it attaches. The SS34's 0.5 mA maximum
+  (25 °C, 40 V) gives at most 0.5 V; nothing hotter is guaranteed, so if a host won't attach to a warm
+  board with 12 V present, remove the 12 V first. R94 draws 5 mA (25 mW) on USB.
 - **U3 TPS63001** buck-boost makes `+3V3` from `VSYS` (1.8–5.5 V in), so the ESP32 stays up across the
   whole cell range.
 - **The reader's supply is always regulated.** U6 (MT3608) boosts `VSYS` to 12.6 V, or 13.2 V with
@@ -163,11 +165,11 @@ boot and OTA**. GPIO high → line low → green / beep. **Confirm the polarity 
 J8 takes an enclosure-mounted switch in parallel instead.
 
 **Inputs IN1–IN4:** dry contacts to GND. Each has an SMF36CA clamp, 4.7 kΩ series (pulse-proof,
-0.25 W) and a 2N7002 with its gate at `+3V3` as an isolator: a 12, 24 or 36 V miswire reads "off"
+0.33 W) and a 2N7002 with its gate at `+3V3` as an isolator: a 12, 24 or 36 V miswire reads "off"
 and nothing conducts. A negative miswire is different. The FET conducts both ways, so a negative wire
 drags its source, and once the GPIO too. Since rev 12, a 1N4148W from ground (D28–D31) holds the
 FET's input side at about −0.75 V, which also keeps its gate within rating. The 4.7 kΩ then carries
-4.9 mA (0.11 W) at −24 V, sustained; −36 V (0.26 W) only briefly. The 47 kΩ pull-up sits on the
+4.9 mA (0.11 W) at −24 V and 7.4 mA (0.26 W) at −36 V, both sustained. The 47 kΩ pull-up sits on the
 FET's side, and 10 kΩ (R90–R93) lies between it and the GPIO. A −24 V miswire puts about 30 µA into
 the GPIO's own clamp diode, holding the pin a few hundred millivolts below ground. That is
 current-limited and survivable, but beyond the ESP32-S3's −0.3 V rating. A closed contact reads
@@ -267,7 +269,8 @@ silkscreen before a cell is ever connected.
 - 12 V on J2 → `+5V` ≈ 4.6 V, `+3V3` = 3.3 V, PWR LED on, about 30–60 mA with Wi-Fi idle.
 - Sweep 6 → 36 V: the rails hold.
 - USB alone → boots and flashes. USB and 12 V together → no back-feed into VBUS. 12 V only, USB
-  unplugged → VBUS (C6) under 0.8 V.
+  unplugged → VBUS (C6) under 0.8 V. If a host won't attach to a warm board with 12 V present,
+  remove the 12 V and plug in again.
 
 **2. Expander and reader monitor:** an I²C scan shows `0x20` and `0x40` (and `0x3C` with the OLED). Remove 12 V with USB still in:
 5 V power-good → off, external power stays on.

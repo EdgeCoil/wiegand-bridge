@@ -145,8 +145,9 @@ part("J1", "usbc", "USB-C", "C2765186",
 cap("C6", "10u25", "VBUS")
 # rev 2: bleeds D3's reverse leakage off an unplugged VBUS. Round 2: 100k held VBUS low only below
 # ~45 C (typical); the SS34 is guaranteed only to 0.5 mA, and a Type-C source waits for VBUS < 0.8 V.
-# 1.5k: <= 0.75 V at 0.5 mA; 3.3 mA from USB.
-res("R87", "1.5k", "VBUS", "GND")
+# 1k: <= 0.5 V at 0.5 mA, with margin for a warm board (no hot figure is guaranteed; full board's
+# audit round 4); 5 mA from USB.
+res("R87", "1k", "VBUS", "GND")
 res("R1", "5.1k", "CC1", "GND")
 res("R2", "5.1k", "CC2", "GND")
 part("D3", "sma_ss34", "SS34", "C8678", {"1": "+VIN", "2": "VBUS"})   # 4.6 V into the buck (min 3.8); off when 12 V is present

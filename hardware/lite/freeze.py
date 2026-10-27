@@ -11,6 +11,7 @@ Then run dfm_post.py and the checks as after routing. route.py is still how a bo
 afresh (when placement changes); freeze.py save after it, and the next review covers all copper.
 """
 import json
+import math
 import os
 import subprocess
 import sys
@@ -31,7 +32,7 @@ NEAR = 2000        # nm: end points this close are the same point
 def debris(items):
     """Segments shorter than SHORT, and pairs on one net, layer and width whose ends match within NEAR."""
     segs = [i for i in items if "via" not in i]
-    short = [i for i in segs if abs(i["start"][0] - i["end"][0]) + abs(i["start"][1] - i["end"][1]) < SHORT]
+    short = [i for i in segs if math.hypot(i["start"][0] - i["end"][0], i["start"][1] - i["end"][1]) < SHORT]   # Euclidean (round 4: a 18.8 um diagonal passed a Manhattan test)
     same = lambda p, q: abs(p[0] - q[0]) <= NEAR and abs(p[1] - q[1]) <= NEAR
     dup, seen = [], []
     for i in segs:

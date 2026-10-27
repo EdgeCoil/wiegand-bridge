@@ -218,17 +218,20 @@ silk_audit()
 
 # rev 12 (audit round 3): the re-route ran IO6 0.205 mm past six field-terminal pins, and only the
 # fab's 0.2 mm clearance caught nothing. Every through-hole pin JLC solders (a part with an LCSC number)
-# must have other-net tracks, vias and other parts' pads >= THT_GAP away; the pour is held off by the
+# must have other-net tracks, vias and other parts' pads >= THT_GAP away (scope: see UNFITTED); the pour is held off by the
 # .kicad_dru rule. Polygon test, not SHAPE.GetClearance (which reports a gap for overlapping shapes).
 THT_GAP = 0.4
-print(f"\n== 7. other-net copper within {THT_GAP} mm of a JLC-soldered through-hole pin")
+print(f"\n== 7. other-net copper within {THT_GAP} mm of a soldered through-hole pin")
 tht_bad = 0
 others = [t for t in board.GetTracks()] + [p for p in board.GetPads()]
+# Every plated through-hole pin someone solders: JLC's and the hand-fitted ones (J14, J8 on the full
+# board; round 4 found the LCSC-field test skipped them). Only the documented not-fitted parts are out.
+UNFITTED = {"J6", "J15", "J16", "J17", "J19", "K1"}
 for fp in board.GetFootprints():
-    if not (fp.HasFieldByName("LCSC") and fp.GetFieldText("LCSC")):
+    if fp.GetReference() in UNFITTED:
         continue
     for pad in fp.Pads():
-        if not pad.HasHole():
+        if pad.GetAttribute() != pcbnew.PAD_ATTRIB_PTH:
             continue
         for L in (pcbnew.F_Cu, pcbnew.B_Cu):
             grown = pcbnew.SHAPE_POLY_SET()

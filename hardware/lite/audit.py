@@ -199,21 +199,24 @@ silk_audit()
 
 # Lite rev 2 (from the full board's audit round 3, where a re-route ran a GPIO 0.205 mm past six
 # field-terminal pins). Every through-hole pin JLC solders (a part with an LCSC number)
-# must have other-net tracks, vias and other parts' pads >= THT_GAP away; the pour is held off by the
+# must have other-net tracks, vias and other parts' pads >= THT_GAP away (scope: see UNFITTED); the pour is held off by the
 # .kicad_dru rule. Polygon test, not SHAPE.GetClearance (which reports a gap for overlapping shapes).
 THT_GAP = 0.4
 # Accepted (Lite audit round 3 to judge): J1's rear shell legs sit 0.31-0.38 mm from the module's
 # bottom-edge pads U1.25-27 (IO21/IO47 LED sinks, U1.26 open), fixed since rev 1 by where the antenna
 # edge and the USB-C both have to be. Held to that measured floor instead of THT_GAP.
 THT_ALLOW = {("J1", "14", "U1"): 0.30}
-print(f"\n== 7. other-net copper within {THT_GAP} mm of a JLC-soldered through-hole pin")
+print(f"\n== 7. other-net copper within {THT_GAP} mm of a soldered through-hole pin")
 tht_bad = 0
 others = [t for t in board.GetTracks()] + [p for p in board.GetPads()]
+# Every plated through-hole pin someone solders: JLC's and the hand-fitted ones (J14, J8 on the full
+# board; round 4 found the LCSC-field test skipped them). Only the documented not-fitted parts are out.
+UNFITTED = set()
 for fp in board.GetFootprints():
-    if not (fp.HasFieldByName("LCSC") and fp.GetFieldText("LCSC")):
+    if fp.GetReference() in UNFITTED:
         continue
     for pad in fp.Pads():
-        if not pad.HasHole():
+        if pad.GetAttribute() != pcbnew.PAD_ATTRIB_PTH:
             continue
         for L in (pcbnew.F_Cu, pcbnew.B_Cu):
             grown = pcbnew.SHAPE_POLY_SET()

@@ -158,8 +158,9 @@ part("D3", "sma_ss34", "SS34", "C8678", {"1": "+5V", "2": "+5V_BUCK"})
 part("D4", "sma_ss34", "SS34", "C8678", {"1": "+5V", "2": "VBUS"})
 # rev 12 (audit round 3): with USB unplugged and +5V up, D4's reverse leakage charges VBUS (C6), and
 # nothing loaded it, so a Type-C source could find VBUS above vSafe0V (0.8 V) and refuse to attach.
-# SS34 IR <= 0.5 mA guaranteed (40 V, 25 C): 1.5k holds VBUS <= 0.75 V; it draws 3.3 mA on USB.
-res("R94", "1.5k", "VBUS", "GND")
+# SS34 IR <= 0.5 mA guaranteed (40 V, 25 C): 1k holds VBUS <= 0.5 V, with margin for a warm board
+# (no hot figure is guaranteed; audit round 4). It draws 5 mA (25 mW) on USB.
+res("R94", "1k", "VBUS", "GND")
 part("D11", "sma_ss34", "SS34", "C8678", {"1": "VSYS", "2": "+5V"})
 cap("C7", "22u25", "VSYS")
 res("R15", "10k", "+5V", "EXT_SENSE")
@@ -296,10 +297,11 @@ part("J6", "hdr8", "TFT/EPD", None,
 # --- Block 11: inputs ---------------------------------------------------------------------------
 # Requirements (rev 12, audit round 3): dry contacts to GND. Closed (<= 1k contact) reads <= 0.5 V
 # (VIL 0.825 V), open reads >= VIH 2.475 V. Positive miswire to +36 V sustained: reads "off", nothing
-# conducts into +3V3. Negative miswire to -24 V sustained: every part within its rating (-36 V
-# briefly, the SMF36CA's standoff). GPIO current on a negative miswire limited to tens of uA.
+# conducts into +3V3. Negative miswire to -36 V sustained (the SMF36CA's standoff): every part within
+# its rating except the GPIO, whose own clamp takes <= ~25 uA with the pin at about -0.4 to -0.6 V
+# (S3: -0.3 V, no injection rating): current-limited, documented, not rated.
 # R40-R43 were 1k 0603 (0.1 W): at -24 V they carried ~23 mA, 0.53 W. At 4.7k (Vishay CRCW-HP,
-# pulse-proof, 0.25 W) it is 4.9 mA, 0.11 W; -36 V is 0.26 W, briefly. The pull-up goes to 47k so the
+# pulse-proof, P70 0.33 W) it is 4.9 mA, 0.11 W; -36 V is 7.4 mA, 0.26 W. The pull-up goes to 47k so the
 # closed level stays low (3.3 x 4.7/51.7 = 0.30 V); wetting current is ~64 uA (was ~0.3 mA).
 part("J9", "kf128", "IN1 IN2", "C474952", {"1": "IN1_RAW", "2": "IN2_RAW"})
 part("J12", "kf128", "GND IN3", "C474952", {"1": "GND", "2": "IN3_RAW"})

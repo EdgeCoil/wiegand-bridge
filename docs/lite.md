@@ -42,7 +42,7 @@ credentials to Home Assistant as events and has no output toward a lock.
 | **R86** 1 kΩ between U3's RESET and EN | U3 discharged C13 (1 µF) unlimited: ~35 mA against its 5 mA absolute maximum. EN low is now 0.30 V |
 | **C45** 10 nF on MR | 28 mm of route beside other signals, into an input that reacts to ~1 ns pulses |
 | **R95** 4.7 kΩ from `+3V3_PU` to GND (in round 1's C46 land; C46 removed), and the four line pull-ups 22 kΩ (were 10 kΩ) | D26 can't sink, so a reader's own 5 V pull-ups lifted the rail to ~4.9 V and the line's low level with it (audit round 2) |
-| **R87** 1.5 kΩ on VBUS | D3's reverse leakage charged an unplugged VBUS toward +VIN; a Type-C source waits for VBUS under 0.8 V (100 kΩ in round 1 held it only below ~45 °C) |
+| **R87** 1 kΩ on VBUS | D3's reverse leakage charged an unplugged VBUS toward +VIN; a Type-C source waits for VBUS under 0.8 V (100 kΩ in round 1 held it only below ~45 °C) |
 | **D1 SS56** (60 V, C18199169, Preferred) replaces the SS34 | In a negative surge D2 holds +VIN_F at −29 V while the input capacitors hold +VIN at up to 16 V: 45 V across D1 |
 | **R88/R89** 10 Ω, pulse-proof (C844519) between the SM712 and U9's A/B | The SM712 clamps above the THVD1420's ±16 V (TI's surge reference circuit). They cost drive: about 1.24 V on a doubly terminated bus at 3.3 V, under TIA-485's 1.5 V; receivers need 0.2 V, so a bus of fail-safe nodes is fine |
 | **D2 SMAJ18CA** (C19077539, bidirectional) on +VIN_F, ahead of D1 | A negative surge meets the TVS rather than D1 (60 V since round 2, see below); a reversed 12 V supply is still blocked by D1 |
@@ -121,9 +121,10 @@ frames are at most 31 bits.
   (C13585) since rev 2; rev 1's 0805 25 V parts held only 40–55 % of 10 µF at 12–16 V.
 - **USB-C VBUS → SS34 → the buck input.** With 12 V present the diode is reverse-biased; from USB
   alone the buck sees 4.6 V (minimum 3.8). No ESD part on D+/D− (the port is inside the enclosure).
-  R87 (1.5 kΩ) bleeds D3's reverse leakage off VBUS when no cable is attached: at the SS34's 0.5 mA
-  maximum (25 °C, 40 V) that is 0.75 V, under the 0.8 V a Type-C source waits for before it attaches.
-  Nothing is guaranteed hotter or at 12–16 V; the typical curve stays under 0.5 mA to about 90 °C. On USB alone the host
+  R87 (1 kΩ) bleeds D3's reverse leakage off VBUS when no cable is attached: at the SS34's 0.5 mA
+  maximum (25 °C, 40 V) that is 0.5 V, under the 0.8 V a Type-C source waits for before it attaches.
+  Nothing is guaranteed hotter or at 12–16 V; the typical curve stays under 0.5 mA to about 90 °C. If
+  a host won't attach to a warm board with 12 V present, remove the 12 V first. R87 draws 5 mA on USB. On USB alone the host
   sees C6 plus the buck's input capacitors (about 26 µF effective), more than USB 2.0's 10 µF:
   that's fine for bench use from a PC or a USB charger, but don't hot-plug it into a hub port that
   enforces inrush limits.
