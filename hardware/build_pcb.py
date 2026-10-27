@@ -17,7 +17,7 @@ from placement import BOARD, PLACE, HOLES  # noqa: E402
 OUT = os.path.join(HERE, "wiegand-bridge.kicad_pcb")
 mm = pcbnew.FromMM
 
-POWER = {"VBUS", "+5V", "BOOST_OUT", "RDR_SW", "+12V_RDR", "BAT+", "BAT-", "Q6_D"}
+POWER = {"VBUS", "+5V", "BOOST_OUT", "BOOST_SNS", "RDR_SW", "+12V_RDR", "BAT+", "BAT-", "Q6_D"}   # BOOST_SNS: rev 12 round 2
 # Input and switch-node nets: 1.0 mm and OUTER layers only (JLCPCB's inner layers are 0.5 oz; layout
 # and DFM reviews 2026-10-11). route.py adds (use_layer F.Cu B.Cu) to these classes in the DSN.
 HICUR = {"+VIN_RAW", "+VIN_F", "+VIN", "+5V_BUCK", "U2_SW", "BOOST_SW"}

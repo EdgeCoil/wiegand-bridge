@@ -282,6 +282,10 @@ sensor:
       accuracy_decimals: 1
       filters:
         - multiply: 1000
+        # the shunt also carries Q11's gate drive (R52/R51, 63 uA while the reader is on) and U12's VBUS
+        # input current (~15 uA through R82): subtract them. For better than ~1.5 % of reading, add a
+        # measured `- multiply:` here from one bench point (docs/design.md, Bench tests 4).
+        - offset: -0.08
     bus_voltage:
       name: "${friendly_name} reader supply"
   - platform: adc

@@ -390,6 +390,10 @@
       },
       {
         "netclass": "Power",
+        "pattern": "BOOST_SNS"
+      },
+      {
+        "netclass": "Power",
         "pattern": "RDR_SW"
       },
       {

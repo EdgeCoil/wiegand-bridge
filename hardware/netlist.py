@@ -23,13 +23,11 @@ Changes from the guide's text, made while assigning real parts (2026-10-11):
 - SW1-SW3 use pads 1 and 4 only: diagonal pads are always across the switch, whichever way the
   part pairs its pins internally.
 - Revision 12 (2026-10-27, rev 11 never ordered), from a passive-to-IC audit:
-  * Reader monitor: U12 INA226 (I2C 0x40) with a 0.1 ohm HIGH-side shunt between the shed switch
-    and F1, replacing the 0.2 ohm low-side shunt + LMV321 x21 (IO9) and the R31/R32 rail divider
-    (IO2). The LMV321's offset is specified in millivolts against a 30 mV full scale (5 mA error per
-    mV); the INA226 guarantees +-10 uV (0.1 mA). Its VBUS input reads the reader terminal itself
-    (after F1, through R82 1k: the field wire's TVS lets it go to about -1 V, and the pin's limit is
-    -0.3 V / 5 mA). The reader's return is now plain GND: the shunt no longer lifts it. IO2 and IO9
-    are free.
+  * Reader monitor: U12 INA226 (I2C 0x40) reading R59, a 0.1 ohm alloy shunt between the boost's
+    output capacitors and the shed switch Q11 (Block 16 has the requirements and the budget), with
+    Kelvin sense tabs. It replaces the 0.2 ohm low-side shunt + LMV321 x21 (IO9) and the R31/R32 rail
+    divider (IO2). VBUS reads the reader terminal through R82 4.7k with a BAT54 clamp. The reader's
+    return is plain GND. IO2 and IO9 are free.
   * U9 THVD1420 in place of the SP3485: a full fail-safe receiver (idle, open or shorted bus reads
     1), so an idle terminated bus is defined on this node without bias. The 20k weak-bias pair
     (R66/R67) is gone; the 390 ohm JP3/JP4 bias stays for buses whose other nodes need it.
@@ -297,12 +295,16 @@ part("J13", "kf128", "IN4 GND", "C474952", {"1": "IN4_RAW", "2": "GND"})
 for n, (q, rs, rp, c) in enumerate((("Q7", "R40", "R44", "C27"), ("Q8", "R41", "R45", "C28"),
                                    ("Q9", "R42", "R46", "C29"), ("Q10", "R43", "R47", "C30")), 1):
     res(rs, "1k", f"IN{n}_RAW", f"IN{n}_D")
-    part(q, "sot23_2n7002", "2N7002", "C8545", {"1": "+3V3", "2": f"IN{n}", "3": f"IN{n}_D"})
-    res(rp, "10k", "+3V3", f"IN{n}")
+    part(q, "sot23_2n7002", "2N7002", "C8545", {"1": "+3V3", "2": f"IN{n}_S", "3": f"IN{n}_D"})
+    res(rp, "10k", "+3V3", f"IN{n}_S")   # rev 12 round 2: pull-up on the FET side, so the series R is no divider
+    # rev 12 (audit round 2, S1): the 2N7002 conducts both ways, so a negative INx_D drags its source
+    # (and the GPIO) with it; only a series resistor limits what reaches the pin. 10k: a closed contact
+    # still reads ~0.33 V (VIL 0.825 V); -24 V on the wire puts <= ~40 uA into the pin's own clamp.
+    res(f"R{89 + n}", "10k", f"IN{n}_S", f"IN{n}")
     cap(c, "10n", f"IN{n}")
-    # rev 12 (audit round 1, S4): a negative miswire forward-biases the FET's body diode and pulled the
-    # GPIO below ground (-24 V: ~22 mA). A 75 V clamp holds INx_D at about -0.9 V, so the GPIO side
-    # stays within a few hundred mV of ground; +36 V is within its 75 V reverse rating.
+    # rev 12 (audit round 1, S4): a negative miswire pulled INx_D (and through the conducting FET, the
+    # GPIO) far below ground (-24 V: ~22 mA). This 75 V clamp holds INx_D at about -0.9 V; R90-R93
+    # then limit what reaches the GPIO. +36 V is within its 75 V reverse rating.
     part(f"D{27 + n}", "sod123f", "1N4148W", "C81598", {"1": f"IN{n}_D", "2": "GND"})   # 1 = K
 
 # --- Block 12 (rev 10): I/O expander, TCA9535 at 0x20 ----------------------------------------------
@@ -350,8 +352,10 @@ part("U9", "soic8_thvd", "THVD1420", "C3235215",
       "6": "U9_A", "7": "U9_B", "8": "+3V3"})
 # rev 12 (audit round 1): the SM712 clamps at up to 19 V, past the THVD1420's +-16 V bus-pin limit; TI's
 # surge reference circuit puts 10 ohm between the clamp and A/B (THVD1420 datasheet, fig. 8-5)
-res("R83", "10", "RS485_A", "U9_A")
-res("R84", "10", "RS485_B", "U9_B")
+part("R83", "r0603", "10", "C844519", {"1": "RS485_A", "2": "U9_A"})   # Vishay CRCW0603...HP, pulse-proof (TI's BOM)
+part("R84", "r0603", "10", "C844519", {"1": "RS485_B", "2": "U9_B"})
+# With R83 + R84 in the loop the driver's guaranteed 1.5 V into 54 ohm becomes ~1.1 V at the terminals
+# (TIA-485 asks 1.5 V); receivers need 0.2 V, so a bus of THVD1420-class nodes is fine (audit round 2).
 cap("C37", "100n", "+3V3")
 res("R65", "10k", "RS485_DE", "GND")      # receive by default, and through boot (ROM prints on TXD0)
 res("R75", "10k", "RS485_RXD", "+3V3")    # RO is high-Z while transmitting (/RE tied to DE)
@@ -380,11 +384,16 @@ part("D20", "sma_tvs", "SMAJ15A", "C19077535", {"1": "+12V_RDR", "2": "GND"})   
 
 # --- Block 16 (rev 12): reader monitor, INA226 on I2C (0x40) -------------------------------------
 # Requirements (guaranteed figures): reader current 0-150 mA (spec), readable to F1's 0.5 A hold,
-# within 0.2 mA + 1.5 % of reading over 25 +- 35 C; the reader terminal's voltage; every pin within
-# -0.3..40 V on the worst transient of its net; reader return solid.
+# within 0.25 mA + 1.5 % of reading over 25 +- 35 C before calibration; the reader terminal's voltage;
+# every pin within -0.3..40 V on the worst transient of its net; reader return solid.
 # R59: alloy 0.1 ohm, 1 %, +-50 ppm/C (Walter STE1206, C201308; audit round 1: the thick-film C25334 was
-# +-800 ppm/C, 4 mA of drift at 150 mA). 819 mA full scale, 25 uA LSB. Budget at 150 mA: INA226
-# offset 0.1 mA + gain 0.1 % + shunt 1 % + 0.18 % drift = 1.9 mA.
+# +-800 ppm/C, 4 mA of drift at 150 mA). 819 mA full scale, 25 uA LSB. Budget (audit round 2), worst
+# case: offset 0.1 mA + drift 0.035 mA + leakage <= 0.003 mA, plus the constant 0.078 mA the shunt also
+# carries (R52/R51 gate drive 63 uA with Q11 on, VBUS ~15 uA), which the firmware subtracts; gain
+# 0.1 % + 0.175 % drift + shunt 1 % + 0.18 % drift (+ <= 0.3 % tab position, estimated). At 150 mA
+# that is about 2.4 mA against 2.5 mA allowed; the tab estimate would take it to ~2.8 mA, over. A
+# one-point gain calibration on the bench (firmware multiply) takes out the shunt's 1 % and the tab
+# term, and R82's 0.57 % on the voltage.
 # The shunt sits between the boost's output capacitors and Q11 (audit round 1, S3): IN+ and IN- are
 # on BOOST_OUT / BOOST_SNS, which the 44 uF hold up and which never go negative, even while Q11 sheds
 # the reader. (Between Q11 and F1 they followed the reader cable through F1 whenever Q11 was off.)
@@ -398,7 +407,7 @@ part("U12", "msop10", "INA226", "C49851",
 # VBUS reads the reader terminal (after F1), so a tripped F1 shows as a low supply. That net is a field
 # wire: D20 lets it swing to about -0.8 V (-3.5 V at surge current), and VBUS's limit is -0.3 V. R82
 # 4.7k + D27 (BAT54, <= 0.24 V at 0.1 mA) hold the pin above -0.3 V; 4.7k against VBUS's 830k
-# input is a 0.57 % gain error (firmware calibrates it out).
+# input is a 0.57 % gain error (a bench calibration takes it out; see the firmware).
 res("R82", "4.7k", "+12V_RDR", "RDR_VBUS")
 part("D27", "sot23_bat54", "BAT54", "C22466368", {"1": "GND", "3": "RDR_VBUS"})   # 1 = A, 3 = K
 cap("C39", "100n", "+3V3")                 # U12 VS

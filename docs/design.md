@@ -9,7 +9,9 @@ with two blocks redrawn around integrated parts, from a passive-to-IC audit:
   ±50 ppm/°C) between the boost's output capacitors and the shed switch Q11. It replaces the 0.2 Ω
   low-side shunt with an LMV321 (×21) on IO9 and the R31/R32 rail divider on IO2. The LMV321's offset
   is specified in millivolts against a 30 mV full scale, 5 mA of error per millivolt. On guaranteed
-  figures the reading is now within 0.2 mA + 1.5 % of reading (1.9 mA at 150 mA). The reader's return
+  figures, uncalibrated, the reading is now within about 0.25 mA + 1.5 % of reading (about 2.4 mA at
+  150 mA). The firmware subtracts the 0.08 mA of gate drive and VBUS current the shunt also carries.
+  A one-point bench calibration (Bench tests, 4) takes out the shunt's 1 %. The reader's return
   is plain ground (the shunt no longer lifts it), and IO2 and IO9 are free.
   - **Kelvin sensing by construction:** R59's footprint has a small sense tab on each land, net-tied to
     it, and U12's IN+/IN− are on nets of their own (`ISNS_P`/`ISNS_N`), laid by `route.py`. No load
@@ -23,7 +25,8 @@ with two blocks redrawn around integrated parts, from a passive-to-IC audit:
   strong bias stays, for buses whose other nodes need it. R83/R84 (10 Ω) sit between the SM712 and
   U9's A/B, because the SM712 clamps above the transceiver's ±16 V. R85 (1 kΩ) feeds RO to RXD0, so a
   USB-UART on the test pads can override it.
-- **Also, from the review of rev 12:** IN1–IN4 have reverse clamps (D28–D31). The green LEDs have
+- **Also, from the review of rev 12:** IN1–IN4 have reverse clamps (D28–D31) and 10 kΩ (R90–R93)
+  between each isolator FET and its GPIO. The green LEDs have
   470 Ω resistors. No copper runs under an M3 screw head on the outer layers. The ground pour is held
   0.4 mm off through-hole pins.
 
@@ -80,7 +83,7 @@ Keep the logger at `INFO` in service. At `DEBUG`, ESPHome logs the Wiegand frame
                                        +5V ─► U5 CN3058E charger ─► LiFePO4 cell ─► Q5 ──────────────┤
                                                                                                       │
                                                    U6 MT3608 boost, 12.6 V (13.2 V with JP1) ◄────────┘
-                                                        └─► Q11 shed switch ─► 0.1 Ω ─► F1 PTC ─► J3 reader +12V
+                                                        └─► 0.1 Ω ─► Q11 shed switch ─► F1 PTC ─► J3 reader +12V
                                                                       (U12 INA226 reads the shunt and the J3 voltage, I²C)
 
  ESP32-S3-WROOM-1-N8R2
@@ -156,13 +159,20 @@ boot and OTA**. GPIO high → line low → green / beep. **Confirm the polarity 
 J8 takes an enclosure-mounted switch in parallel instead.
 
 **Inputs IN1–IN4:** dry contacts to GND. Each has an SMF36CA clamp, 1 kΩ series and a 2N7002 with its
-gate at `+3V3` as an isolator: a 12 or 24 V miswire reads "off" and damages nothing. Since rev 12 a
-1N4148W from ground on each FET's input side (D28–D31) also takes a negative miswire. Without it,
-the FET's body diode pulled the GPIO below ground (about 22 mA at −24 V).
+gate at `+3V3` as an isolator: a 12 or 24 V miswire reads "off" and damages nothing. A negative
+miswire is different. The FET conducts both ways, so a negative wire drags its source, and once the
+GPIO too. Since rev 12, a 1N4148W from ground (D28–D31) holds the FET's input side at about −0.9 V.
+The pull-up sits on the FET's side, and 10 kΩ (R90–R93) lies between it and the GPIO. A −24 V
+miswire then puts at most about 40 µA into the GPIO's own clamp diode. It is current-limited, but
+the pin still goes a few hundred millivolts below ground, so treat it as survivable, not rated. A
+closed contact still reads about 0.33 V.
 
 **RS-485:** THVD1420 on UART0 (TX/RX), DE/RE on IO38. Its receiver is fully fail-safe, so this board
 reads an idle bus correctly whatever the bias. Bridge **JP2** (120 Ω termination) and
-**JP3 + JP4** (fail-safe bias) only on the board at the end of the bus. J21 carries reader power and
+**JP3 + JP4** (fail-safe bias) only on the board at the end of the bus. R83/R84 (10 Ω,
+pulse-proof) sit between the surge clamp and the transceiver, as in TI's surge reference circuit.
+They reduce the guaranteed drive at the terminals into a 54 Ω load from 1.5 V to about 1.1 V, below
+TIA-485's 1.5 V. Every receiver on the bus still sees far more than the 0.2 V it needs. J21 carries reader power and
 ground for an OSDP reader. ESPHome has no OSDP component yet; the UART is declared so the port can
 be tested.
 
@@ -265,6 +275,9 @@ silkscreen before a cell is ever connected.
 **4. Reader** (12 V, GND, D0, D1 wired; reader in 26-bit Wiegand mode)
 - Reader current shows its idle draw; ≤ 150 mA with backlight and beep. Unplugging the reader shows
   as a current change, which is your "reader removed" signal.
+- Calibrate the reader monitor once: measure the reader's current with a meter in series and
+  compare it with the reported value. Add the ratio as a `multiply` filter on the ina226 current in
+  the firmware.
 - Short the reader's `+12V` to `GND` → F1 or U6 limits, and the board stays up.
 - With the reader disconnected → no spurious events for ten minutes.
 - 50 card reads and 20 PINs with no misses. Reset ten times: the reader neither beeps nor flashes.

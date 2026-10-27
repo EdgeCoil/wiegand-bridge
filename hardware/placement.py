@@ -50,7 +50,8 @@ for n, (q, rs, rp, c) in enumerate((("Q7", "R40", "R44", "C27"), ("Q8", "R41", "
     at(q, 116.9, y, 0)
     at(rp, 120.4, y - 0.9, 0)
     at(c, 120.4, y + 0.9, 0)
-    at(f"D{28 + n}", 115.6, y + 2.6, 0)   # rev 12: INx_D reverse clamp, between the rows
+    at(f"D{28 + n}", 115.6, y + 2.85, 0)  # rev 12: INx_D reverse clamp, between the rows
+    at(f"R{90 + n}", 122.7, y, 90)          # rev 12 round 2: series R between the FET side and the GPIO
 
 # --- bottom terminals: LED/BEEP, D0/D1, reader power, 12 V in -----------------------------------
 at("J11", 122.0, TERM_Y)

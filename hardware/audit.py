@@ -163,6 +163,13 @@ def width_for(amps):            # IPC-2221 external, 10 C rise, 35 um copper
 
 
 widths = {}
+# rev 12 (audit round 2): BOOST_SNS was left out of build_pcb's POWER set and routed at the default
+# 0.25 mm; every current-carrying net must sit in a wide class, not Default
+_ns = board.GetDesignSettings().m_NetSettings
+for _n in NEED:
+    _cls = [t.GetNetClassName() for t in board.GetTracks() if t.GetNetname() == _n][:1]
+    if _cls and _cls[0] == "Default":
+        print(f"   NARROW CLASS: {_n} carries {NEED[_n]} A but is in the Default net class")
 for t in board.GetTracks():
     if t.GetClass() == "PCB_VIA":
         continue
