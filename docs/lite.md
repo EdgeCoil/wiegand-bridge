@@ -102,10 +102,12 @@ wire ──┬── SM712 (one per pair) ── GND
   of cable. For a reader without pull-ups of its own, keep cable capacitance under about 4 nF for
   SIA's shortest 200 µs pulse interval (about 6 nF with negligible leakage on the node; 4 nF allows
   the datasheet-maximum 16 µA), or about 20 nF for the usual 1 ms (30 nF with negligible leakage;
-  20 nF is roughly 150 m of typical cable, Wiegand's usual maximum run). That takes the interval as the
+  at about 130 pF/m that is roughly 150 m, Wiegand's usual maximum run; a shielded pair measured to
+  its grounded shield can be nearer 180 pF/m, about 110 m, so check your cable's conductor-to-shield
+  figure). That takes the interval as the
   high time between pulses; if a reader counts it start to start with 100 µs pulses, the high time
-  halves and so does the limit (about 2 nF at 16 µA, 2.9 nF with none: roughly 15–20 m of typical
-  cable; audit round 6). A reader with its own pull-ups (most open-collector readers have 1k–10k to
+  halves and so does the limit (about 2 nF at 16 µA, 2.9 nF with none: roughly 15–20 m at 130 pF/m;
+  audit round 6). A reader with its own pull-ups (most open-collector readers have 1k–10k to
   5 V) is not limited by this.
 
 ESPHome has no Wiegand transmitter, so `wiegand_tx` bit-bangs one in a lambda: 50 µs low per bit,

@@ -51,14 +51,18 @@ Rev 2 audit round 1 (2026-10-27), with the board grown from 42 x 44 to 42 x 47 m
   5 mA absolute maximum (TPS3808 6.1). EN low is then <= 0.71 V on guaranteed figures (U3's VOL 0.4 V plus 1k/11k of
   the rest), against the ESP32's VIL of 0.81 V.
 - C45 10 nF on MR (28 mm of route beside other signals; the chip reacts to ~1 ns pulses).
-- C46 100 nF on +3V3_PU (59 mm of 0.2 mm track fed through the BAT54).
-- R87 100k bleed on VBUS: D3's reverse leakage charged an unplugged VBUS toward +VIN.
+- C46 100 nF on +3V3_PU (59 mm of 0.2 mm track fed through the BAT54). Removed in round 2: R95 4.7k
+  bleed in its land.
+- R87 100k bleed on VBUS: D3's reverse leakage charged an unplugged VBUS toward +VIN. 1k since round 3.
 - R88/R89 10 ohm between the bus (SM712, termination) and U9's A/B: the SM712 clamps above the
   THVD1420's +-16 V (TI's surge reference circuit, THVD1420 fig. 8-5).
 - D2 is an SMAJ18CA (bidirectional, C19077539, Preferred) on +VIN_F, ahead of D1: a negative surge
-  now meets the TVS, not D1's 40 V reverse rating; a reversed 12 V supply (under the 18 V standoff)
-  is still blocked by D1.
+  now meets the TVS, not D1's 40 V reverse rating (D1 is the 60 V SS56 since round 2); a reversed
+  12 V supply (under the 18 V standoff) is still blocked by D1.
 - R3/R81 470 ohm: green Vf up to 3.1 V left 0.3-0.7 mA through 1k.
+
+Later rounds (round 2 onward): R95 +3V3_PU bleed, R87 1k, D1 SS56, the line pull-ups 22k, a
+.kicad_dru pour rule; see docs/lite.md, Revision 2, and the comments at each part.
 """
 
 STD = "/usr/share/kicad/footprints"
