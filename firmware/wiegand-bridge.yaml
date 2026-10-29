@@ -377,11 +377,18 @@ globals:
   # Reader shed state, written only by script reader_supply_policy (below). reader_shed_low_battery is
   # true exactly while the reader is shed for a low cell: that holds FLT low with the terminal at 0 V,
   # which is not an overload.
+  # Both kept in flash (audit round 12, S1): a shed must survive a reboot, and with Wi-Fi or HA down in
+  # an outage ESPHome reboots every 15 min (reboot_timeout). IO48 comes up low (reader on, by R18/R99),
+  # and the policy re-asserts the shed at its first run once the expander has read ext_power. Written
+  # at most once a minute (flash_write_interval): a reboot within a minute of a shed may still retry
+  # once.
   - id: reader_shed_low_battery
     type: bool
+    restore_value: true
     initial_value: 'false'
   - id: reader_is_shed            # IO48 high (the output has no readable state)
     type: bool
+    restore_value: true
     initial_value: 'false'
   - id: reader_released_ms        # when a shed last ended; reader_overload ignores the restart after it
     type: uint32_t
@@ -427,7 +434,8 @@ script:
   # runs on every relevant change and once a second:
   # - external power present: end any shed (the eFuse may retry; the boost has a supply).
   # - on battery, not shed: shed for a low cell (battery_v < 3.0 V) or for an overload. A shed holds
-  #   until external power returns, so a short is not retried from the cell.
+  #   until external power returns, so a short is not retried from the cell; it is kept in flash and
+  #   re-asserted after a reboot (globals, below).
   # The shed output and its flags change together here and nowhere else.
   - id: reader_supply_policy
     then:
@@ -440,7 +448,9 @@ script:
               id(reader_shed_low_battery) = false;
               id(reader_released_ms) = millis();
             }
-          } else if (!id(reader_is_shed)) {
+          } else if (id(reader_is_shed)) {
+            id(reader_shed).turn_on();                      // re-assert: IO48 comes up low after a reboot
+          } else {
             if (id(battery_v).state < 3.0f) {               // false while NaN (no reading yet)
               id(reader_shed_low_battery) = true;
               id(reader_is_shed) = true;

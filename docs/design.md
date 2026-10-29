@@ -177,7 +177,8 @@ Keep the logger at `INFO` in service. At `DEBUG`, ESPHome logs the Wiegand frame
   **So a reader short or plug-in on battery is survived except when it coincides with a Wi-Fi peak on a
   hot board with a nearly flat cell**: then the battery protection may switch the board off
   until external power returns. Typical parts leave about twice the margin. The firmware sheds the
-  reader on battery after an overload, so a short is not retried.
+  reader on battery after an overload, so a short is not retried (apart from about a second at each
+  reboot, see *Shedding*).
 - **USB alone** (bench use): the board, the charger and a 150 mA reader together already draw about
   1 A, twice a 500 mA port's allowance, fault or not. In a short, about 1.4 A. On USB alone, keep the
   reader under about 50 mA, or run it from 12 V.
@@ -187,7 +188,10 @@ Keep the logger at `INFO` in service. At `DEBUG`, ESPHome logs the Wiegand frame
   could exceed. R18 holds Q4 off through reset, boot and OTA, so the reader stays **on**. The firmware
   sheds the reader only on battery: below 3.0 V, or with an overload (including one already present
   when external power goes). It checks the present state every second, not just on changes, so a
-  reboot on a low cell still sheds. A shed holds until external power returns. (U6 `EN` is tied high.
+  reboot on a low cell still sheds. A shed holds until external power returns, and is kept in flash,
+  so a reboot on battery (ESPHome restarts every 15 min without Wi-Fi or Home Assistant) re-applies it
+  about a second after boot; for that second the reader is on. One consequence: a board shed on
+  battery stays shed through a cell swap until external power returns. (U6 `EN` is tied high.
   Pulling `EN` low on a non-synchronous boost still leaks `VSYS` through to the output.)
 - **F1** (PTC, 0.5 A hold) stays as a fail-safe in case U13 fails short. It never trips in normal
   service: the reader's 150 mA is under its 0.23 A hold at 85 °C. U13's limit can exceed that hold, so
@@ -380,6 +384,17 @@ silkscreen before a cell is ever connected.
 - On a charged spare cell alone, short the reader and hot-plug the reader (with Wi-Fi busy, e.g.
   streaming logs) → the board should stay up (see *Reader supply* for when it may not). If the
   battery protection does trip, external power is needed to recover.
+- The shed policy (on battery, the firmware sheds the reader for an overload or a cell under 3.0 V and
+  holds it until external power returns):
+  - On the cell alone, short J3, then remove the short → *overload* on, terminal about 0 V, and the
+    reader stays shed with no retry (scope `FLT`). Reconnect 12 V → the reader comes back and
+    *overload* clears within about 1.5 s.
+  - With 12 V on, short J3, then remove the 12 V → shed within about 2 s.
+  - During an overload shed on the cell, press RESET → the reader is shed again about a second after
+    boot.
+  - With a bench supply on J4 at 2.9 V and no external power, press RESET → the reader is shed within
+    about 5 s of boot (at the first battery reading).
+  - During an overload shed, remove 12 V for under a second → shed again within about 1.5 s.
 - With the reader disconnected → no spurious events for ten minutes.
 - 50 card reads and 20 PINs with no misses. Reset ten times: the reader neither beeps nor flashes.
 
