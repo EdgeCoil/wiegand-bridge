@@ -394,10 +394,11 @@ silkscreen before a cell is ever connected.
   - With 12 V on, short J3, then remove the 12 V → shed within about 2 s.
   - During an overload shed on the cell, wait at least 10 s (the shed is saved within about 6 s), then press
     RESET → the reader is shed again about a second after boot.
-  - Low cell found at boot (not restored): with no external power, run the board from a bench supply
-    on J4 at 3.3 V for at least 10 s, so "not shed" is stored. Hold RESET, lower the supply to 2.9 V,
-    release RESET → the reader is shed at the first battery reading, within about 5 s of boot. A shed
-    at about 1 s would be the restored state, not this test. (Start at 3.3 V: connected fresh at 2.9 V,
+  - Low cell found at boot (not restored): remove the short from J3, then apply and remove 12 V (this
+    clears any stored shed). With no external power, run the board from a bench supply on J4 at 3.3 V
+    for at least 10 s, so "not shed" is stored. Hold RESET, lower the supply to 2.9 V, release RESET →
+    the reader is shed at the first battery reading, within about 5 s of boot. A shed at about 1 s
+    would be the restored state, not this test. (Start at 3.3 V: connected fresh at 2.9 V,
     the battery protection stays off below its 3.0 V release level.)
   - During an overload shed on the cell with the short still on, connect 12 V for under a second and
     remove it → the shed is released, U13 retries into the short, and the reader is shed again within
