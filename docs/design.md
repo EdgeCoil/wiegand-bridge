@@ -383,26 +383,29 @@ silkscreen before a cell is ever connected.
 - Power the board up with the short already on J3 → the same behaviour from the first attempt.
 - Scope the reader terminal at power-up with the reader connected: a 0.13–0.24 s ramp to 12.6 V, and
   `FLT` high once it is done.
-- On a charged spare cell alone, short the reader and hot-plug the reader (with Wi-Fi busy, e.g.
-  streaming logs) → the board should stay up (see *Reader supply* for when it may not). If the
-  battery protection does trip, external power is needed to recover.
-- The shed policy (on battery, the firmware sheds the reader for an overload or a cell under 3.0 V and
-  holds it until external power returns):
-  - On the cell alone, short J3, then remove the short → *overload* on, terminal about 0 V, and the
-    reader stays shed with no retry (scope `FLT`). Reconnect 12 V → the reader comes back and
-    *overload* clears within about 1.5 s.
-  - With 12 V on, short J3, then remove the 12 V → shed within about 2 s.
-  - During an overload shed on the cell, wait at least 10 s (the shed is saved within about 6 s), then press
-    RESET → the reader is shed again about a second after boot.
-  - Low cell found at boot (not restored): remove the short from J3, then apply and remove 12 V (this
-    clears any stored shed). With no external power, run the board from a bench supply on J4 at 3.3 V
-    for at least 10 s, so "not shed" is stored. Hold RESET, lower the supply to 2.9 V, release RESET →
-    the reader is shed at the first battery reading, within about 5 s of boot. A shed at about 1 s
-    would be the restored state, not this test. (Start at 3.3 V: connected fresh at 2.9 V,
-    the battery protection stays off below its 3.0 V release level.)
-  - During an overload shed on the cell with the short still on, connect 12 V for under a second and
-    remove it → the shed is released, U13 retries into the short, and the reader is shed again within
-    about 2 s.
+- On battery the firmware sheds the reader for an overload or a cell under 3.0 V, and holds the shed,
+  through resets too, until external power returns. So the steps below on the cell start by
+  **clearing the shed**: remove any short from J3, connect the charged cell, apply 12 V for at least
+  10 s (the cleared state reaches flash within about 6 s), then remove the 12 V.
+- Battery load (clear the shed first), with Wi-Fi busy, e.g. streaming logs: hot-plug the reader → it
+  starts and the board stays up (the plug-in limit lasts up to ~35 ms, well inside the 1 s fault
+  filter, so it does not shed). Then short J3 → the board should stay up (see *Reader supply* for when
+  it may not). If the battery protection does trip, external power is needed to recover.
+- The shed policy, in this order:
+  1. Clear the shed. Short J3, then remove the short → *overload* on, terminal about 0 V, and the
+     reader stays shed with no retry (scope `FLT`). Reconnect 12 V → the reader comes back and
+     *overload* clears within about 1.5 s.
+  2. With 12 V still on, short J3, then remove the 12 V → shed within about 2 s.
+  3. With the short still on, wait at least 10 s, then press RESET → the reader is shed again about a
+     second after boot.
+  4. With the short still on, connect 12 V for under a second and remove it → the shed is released,
+     U13 retries into the short, and the reader is shed again within about 2 s.
+  5. Low cell found at boot (not restored): clear the shed, swap the cell for a bench supply on J4 at
+     3.3 V and let the board run at least 10 s. Hold RESET, lower the supply to 2.9 V, release RESET →
+     the reader is shed at the first battery reading, within about 5 s of boot. A shed at about 1 s
+     would be a restored state, not this test. (Start at 3.3 V: connected fresh at 2.9 V, the battery
+     protection stays off below its 3.0 V release level.)
+  6. Reconnect the cell and clear the shed.
 - With the reader disconnected → no spurious events for ten minutes.
 - 50 card reads and 20 PINs with no misses. Reset ten times: the reader neither beeps nor flashes.
 
