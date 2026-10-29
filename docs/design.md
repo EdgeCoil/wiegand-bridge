@@ -184,9 +184,11 @@ Keep the logger at `INFO` in service. At `DEBUG`, ESPHome logs the Wiegand frame
 - **Shedding:** IO48 drives Q4, which pulls U13's `SHDN` low (≤ 10 µA from the pin, plus R99's
   33–36 µA). R99 (100 kΩ to `+3V3`) holds `SHDN` up: U13's own pull-up is specified only at 0.1 µA,
   which Q4's leakage on a hot board (no figure above 25 °C) or leakage across the pin's 0.2 mm gaps
-  could exceed. R18 holds Q4 off through reset, boot and OTA, so the reader stays **on**. The firmware sheds the
-  reader only on battery: below 3.0 V, or after an overload. (U6 `EN` is tied high. Pulling `EN` low on
-  a non-synchronous boost still leaks `VSYS` through to the output.)
+  could exceed. R18 holds Q4 off through reset, boot and OTA, so the reader stays **on**. The firmware
+  sheds the reader only on battery: below 3.0 V, or with an overload (including one already present
+  when external power goes). It checks the present state every second, not just on changes, so a
+  reboot on a low cell still sheds. A shed holds until external power returns. (U6 `EN` is tied high.
+  Pulling `EN` low on a non-synchronous boost still leaks `VSYS` through to the output.)
 - **F1** (PTC, 0.5 A hold) stays as a fail-safe in case U13 fails short. It never trips in normal
   service: the reader's 150 mA is under its 0.23 A hold at 85 °C. U13's limit can exceed that hold, so
   a long short on a hot board may also trip F1, which resets when the short goes.

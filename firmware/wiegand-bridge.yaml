@@ -199,6 +199,9 @@ output:
 # Status pair (rev 11): red FAULT = ESPHome's status LED (slow blink warning, fast blink error);
 # green OK = steady while a client (Home Assistant) is connected to the API.
 interval:
+  - interval: 1s                  # the reader shed policy is level-triggered: re-check it every second
+    then:
+      - script.execute: reader_supply_policy
   - interval: 1s
     then:
       - if:
@@ -233,16 +236,8 @@ binary_sensor:
     name: "${friendly_name} external power"
     device_class: power
     pin: {pca9554: io_exp, number: 3}       # +5V divider, ~2.8 V when present (rev 10: via the expander)
-    on_press:
-      - script.execute: reader_release      # also ends a shed for an overload on battery (below)
-    on_release:
-      # battery_v's on_value_range only fires on crossing 3.0 V: a cell already below it when external
-      # power goes would otherwise not be shed (audit round 8, S1)
-      - if:
-          condition:
-            lambda: 'return id(battery_v).state < 3.0f;'
-          then:
-            - script.execute: reader_shed_low_battery_now
+    on_state:
+      - script.execute: reader_supply_policy
   # U13 FLT (TPS26625, open drain, R97 pull-up, to IO9): low on overload, thermal shutdown, UVLO,
   # reverse current, while shed, and through its slow start (up to ~0.7 s with the power-good deglitch).
   # No open-load indication. The eFuse retries by itself; this only reports. A reader plugged into a
@@ -274,11 +269,7 @@ binary_sensor:
              millis() - id(reader_released_ms) > 1500 &&
              !isnan(id(reader_v).state) && id(reader_v).state < 9.0f;
     on_press:
-      - if:
-          condition:
-            binary_sensor.is_off: ext_power
-          then:
-            - output.turn_on: reader_shed
+      - script.execute: reader_supply_policy
   - platform: gpio
     name: "${friendly_name} battery charging"
     device_class: battery_charging
@@ -349,14 +340,8 @@ sensor:
     filters:
       - multiply: 2.0
     update_interval: 60s
-    on_value_range:
-      - below: 3.0
-        then:
-          - if:
-              condition:
-                binary_sensor.is_off: ext_power
-              then:
-                - script.execute: reader_shed_low_battery_now
+    on_value:
+      - script.execute: reader_supply_policy
 
   # Battery thermistor (rev 10, 2026-10-11): U5's TEMP divider (R77 5.1k from +5V, R78 68k, a 10k
   # B3950 NTC on the cell at J4 pins 3-4, or RT1 via JP5) read through R79/R80 (2/3) on IO3.
@@ -389,11 +374,13 @@ sensor:
       reference_resistance: 10kOhm
 
 globals:
-  # Reader shed state (audit round 10: rebuilt after rounds 8-9 patched a delayed clear that raced the
-  # ext_power triggers). The shed output and this flag change together, only in the two scripts
-  # below, with no delay between them: the flag is true exactly while the reader is shed for a low cell.
-  # A low-battery shed holds FLT low with the terminal at 0 V, which is not an overload.
+  # Reader shed state, written only by script reader_supply_policy (below). reader_shed_low_battery is
+  # true exactly while the reader is shed for a low cell: that holds FLT low with the terminal at 0 V,
+  # which is not an overload.
   - id: reader_shed_low_battery
+    type: bool
+    initial_value: 'false'
+  - id: reader_is_shed            # IO48 high (the output has no readable state)
     type: bool
     initial_value: 'false'
   - id: reader_released_ms        # when a shed last ended; reader_overload ignores the restart after it
@@ -434,16 +421,35 @@ event:
 #   oled: !include wiegand-bridge-oled.yaml
 
 script:
-  - id: reader_release            # end any shed (low battery or overload): external power is back
+  # Reader shed policy (audit round 11: level-triggered; rounds 8-11 found edge-triggered versions that
+  # missed an overload already present when external power went, and a low cell after a reboot, since
+  # on_value_range restores its last state from flash). It reads the present state, not events, and
+  # runs on every relevant change and once a second:
+  # - external power present: end any shed (the eFuse may retry; the boost has a supply).
+  # - on battery, not shed: shed for a low cell (battery_v < 3.0 V) or for an overload. A shed holds
+  #   until external power returns, so a short is not retried from the cell.
+  # The shed output and its flags change together here and nowhere else.
+  - id: reader_supply_policy
     then:
-      - output.turn_off: reader_shed
       - lambda: |-
-          id(reader_shed_low_battery) = false;
-          id(reader_released_ms) = millis();
-  - id: reader_shed_low_battery_now
-    then:
-      - lambda: id(reader_shed_low_battery) = true;
-      - output.turn_on: reader_shed
+          if (!id(ext_power).has_state()) return;          // expander not read yet (boot)
+          if (id(ext_power).state) {
+            if (id(reader_is_shed)) {
+              id(reader_shed).turn_off();
+              id(reader_is_shed) = false;
+              id(reader_shed_low_battery) = false;
+              id(reader_released_ms) = millis();
+            }
+          } else if (!id(reader_is_shed)) {
+            if (id(battery_v).state < 3.0f) {               // false while NaN (no reading yet)
+              id(reader_shed_low_battery) = true;
+              id(reader_is_shed) = true;
+              id(reader_shed).turn_on();
+            } else if (id(reader_overload).state) {
+              id(reader_is_shed) = true;
+              id(reader_shed).turn_on();
+            }
+          }
   - id: screen_wake
     mode: restart
     then:
