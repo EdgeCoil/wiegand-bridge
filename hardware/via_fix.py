@@ -4,7 +4,7 @@
 
 route.fanout_gnd placed vias 0.9 mm from a pad's CENTRE, which on big pads (SMA diodes, 1206 caps,
 U2 pin 7, USB-C GND) is still inside the pad: solder wicks down the open hole. Exposed-pad thermal
-vias (U1.41, U2.9, U3.11, U5.9, U13.9) are deliberate and left alone. Each offending via and its stub are
+vias (U1.41, U2.9, U3.11, U5.9, U13.11) are deliberate and left alone. Each offending via and its stub are
 removed and replaced by a via whose ring clears the pad's opening (+0.1 mm), with a 0.3 mm stub from
 the pad centre, both checked against finish_net's obstacle grid (all layers for the via, the pad's
 layer for the stub). KiCad DRC is the check afterwards.
@@ -25,7 +25,7 @@ sys.argv.append("--tight")
 import finish_net as F  # noqa: E402
 
 mm, ToMM = pcbnew.FromMM, pcbnew.ToMM
-EP = {("U1", "41"), ("U2", "9"), ("U3", "11"), ("U5", "9"), ("U13", "9")}
+EP = {("U1", "41"), ("U2", "9"), ("U3", "11"), ("U5", "9"), ("U13", "11")}
 VR = 0.3            # via radius
 MASK = 0.05         # mask expansion
 

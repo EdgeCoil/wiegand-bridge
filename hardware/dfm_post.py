@@ -18,7 +18,7 @@ import pcbnew
 HERE = os.path.dirname(os.path.abspath(__file__))
 PCB = os.path.join(HERE, "wiegand-bridge.kicad_pcb")
 mm, ToMM = pcbnew.FromMM, pcbnew.ToMM
-EP = {"U2": "9", "U3": "11", "U5": "9", "U13": "9"}
+EP = {"U2": "9", "U3": "11", "U5": "9", "U13": "11"}
 DIODE_POUR = {"D1": 2.2, "D3": 2.0, "D11": 2.0}     # extra copper around each non-GND pad, mm
 
 
@@ -37,7 +37,7 @@ def paste(board):
     for ref, num in EP.items():
         fp = board.FindFootprintByReference(ref)
         ep = [p for p in fp.Pads() if p.GetNumber() == num and p.GetAttribute() == pcbnew.PAD_ATTRIB_SMD
-              and p.GetSize().x > mm(1)][0]
+              and p.GetBoundingBox().GetWidth() > mm(1)][0]   # bbox: U13's pad is custom (0.005 mm anchor)
         holes = []                          # collect first: fp.Pads() is unusable after fp.Remove()
         for v in vias:
             if ep.HitTest(v.GetPosition(), mm(0.3)):
@@ -48,7 +48,9 @@ def paste(board):
         apertures = [p for p in fp.Pads() if not p.GetLayerSet().Contains(pcbnew.F_Cu)
                      and p.GetLayerSet().Contains(pcbnew.F_Paste)]
         old = [g for g in fp.GraphicalItems() if g.GetLayer() == pcbnew.F_Paste]
-        pad_area = ToMM(ep.GetSize().x) * ToMM(ep.GetSize().y)
+        full = pcbnew.SHAPE_POLY_SET()
+        ep.TransformShapeToPolygon(full, pcbnew.F_Cu, 0, mm(0.005), pcbnew.ERROR_INSIDE)
+        pad_area = full.Area() / 1e12
         poly = pcbnew.SHAPE_POLY_SET()
         ep.TransformShapeToPolygon(poly, pcbnew.F_Cu, mm(-0.05), mm(0.005), pcbnew.ERROR_INSIDE)
         ls = ep.GetLayerSet()

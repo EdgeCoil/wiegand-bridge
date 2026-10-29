@@ -49,8 +49,8 @@ def thermal_vias(board):
             for dx in (-1.05, 1.05):
                 via(board, int(c.x + mm(dx)), c.y, gnd)
         elif ref == "U13":
-            # reader switch: two vias in the exposed pad (a short holds up to 4.9 W for 45 ms)
-            ep = [p for p in fp.Pads() if p.GetNumber() == "9"][0].GetPosition()
+            # reader eFuse: two vias in the exposed pad (a short holds up to 3.5 W until thermal shutdown)
+            ep = [p for p in fp.Pads() if p.GetNumber() == "11"][0].GetPosition()
             for dy in (-0.5, 0.5):
                 via(board, ep.x, int(ep.y + mm(dy)), gnd)
         if ref in ("U1", "U2", "U3", "U5", "U13"):   # exposed pads (and their vias) join the pours solidly
@@ -136,30 +136,87 @@ def preroute(board):
 
 
 def preroute_rdr_sw(board):
-    """Reader-switch study: U13's OUT (pin 7) to F1. Pin 7 sits mid-row at 0.65 mm pitch between
-    BOOST_SNS and GND, so a Power-width track can leave it only straight out, necked to the pad's
-    width; Freerouting found that 2 times in 16 (once via the bottom layer). Out of the pin, then
-    straight down the channel between R96 and R97 (and clear of R59's BOOST_OUT land) into F1 pad 1."""
+    """U13 (TPS26625) escapes at its 0.5 mm pitch, where Freerouting cannot neck a wide class down.
+    OUT (pin 10, top of the right-hand column) leaves to the right 0.3 mm wide until it is clear of FLT's
+    escape, then runs 0.6 mm to a lane at F1.1's x and straight down to F1 (0.3 mm carries the 0.26 A
+    limit; audit NEED is 0.12 mm). FLT (pin 9) goes right under that neck and down to a via inside the
+    pocket, below DVDT's exit, so pins 7 and 8 keep their way down the pocket. IN (pin 1, BOOST_SNS)
+    leaves upward 0.3 mm, then 0.6 mm to C41, with a 0.25 mm tap left and down into R51 (UVLO divider,
+    microamps). GND pins 3, 5 and 6 join the exposed pad under the body.
+    rev 12 (eFuse): the first version ran OUT at 0.6 mm from the pin, 0.05 mm from pin 9, and checked
+    only the lane; every laid segment is now checked against every other-net pad."""
     u13 = {p.GetNumber(): p for p in board.FindFootprintByReference("U13").Pads()}
     f1 = {p.GetNumber(): p for p in board.FindFootprintByReference("F1").Pads()}
+    c41 = {p.GetNumber(): p for p in board.FindFootprintByReference("C41").Pads()}
+    r51 = {p.GetNumber(): p for p in board.FindFootprintByReference("R51").Pads()}
     T = pcbnew.ToMM
-    px, py = T(u13["7"].GetPosition().x), T(u13["7"].GetPosition().y)
-    tip = T(u13["7"].GetBoundingBox().GetRight())
-    fx, fy = T(f1["1"].GetPosition().x), T(f1["1"].GetPosition().y)
-    ftop = T(f1["1"].GetBoundingBox().GetTop())
-    lane = fx - 0.05
-    # the lane's 0.6 mm track keeps 0.2 mm from every other-net pad it passes
-    for r, n in (("R96", "2"), ("R97", "1"), ("R59", "1"), ("U13", "6"), ("U13", "5")):
-        bb = [q for q in board.FindFootprintByReference(r).Pads() if q.GetNumber() == n][0].GetBoundingBox()
-        left, right = T(bb.GetLeft()), T(bb.GetRight())
-        gap = lane - 0.3 - right if right < lane else left - lane - 0.3
-        assert gap >= 0.2, ("RDR_SW lane", r, n, gap)
-    track(board, [(px, py), (tip + 0.3, py)], "RDR_SW", 0.36)
-    # pin 6 (GND) is then walled in by pins 5 and 7 and this track: join it to the exposed pad under the body
-    g = u13["6"].GetPosition()
-    ep = u13["9"].GetPosition()
-    track(board, [(T(g.x), T(g.y)), (T(ep.x), T(g.y))], "GND", 0.36)
-    track(board, [(tip + 0.3, py), (lane, py + lane - tip - 0.3), (lane, ftop + 0.3), (fx, fy)], "RDR_SW", 0.6)
+
+    def c(p):
+        return T(p.GetPosition().x), T(p.GetPosition().y)
+    before = {t.m_Uuid.AsString() for t in board.GetTracks()}
+    (px, py), (fx, fy) = c(u13["10"]), c(f1["1"])
+    lane = fx
+    (gx, gy) = c(u13["9"])
+    pin_right = T(u13["9"].GetBoundingBox().GetRight())
+    turn = pin_right + 1.1                     # FLT's turn, right of DVDT's exit and its way down
+    vx, vy = turn + 0.35, gy + 0.6             # FLT via: 0.5 mm under the 0.6 mm OUT run
+    neck = turn + 0.6                          # 0.6 mm OUT starts 0.6 mm (centres) past FLT's turn
+    track(board, [(px, py), (neck, py)], "RDR_SW", 0.3)
+    track(board, [(neck, py), (lane, py), (fx, fy)], "RDR_SW", 0.6)
+    track(board, [(gx, gy), (turn, gy), (vx, vy)], "RDR_FLT", 0.2)
+    v = pcbnew.PCB_VIA(board)
+    v.SetPosition(pcbnew.VECTOR2I(mm(vx), mm(vy)))
+    v.SetWidth(mm(0.6))
+    v.SetDrill(mm(0.3))
+    v.SetNet(board.FindNet("RDR_FLT"))
+    v.SetLocked(True)
+    board.Add(v)
+    (ix, iy), (cx, cy), (rx, ry) = c(u13["1"]), c(c41["1"]), c(r51["1"])
+    assert ry < iy - 0.5, "R51 must stand with its BOOST_SNS end (pin 1) up, above U13 pin 2's way out"
+    track(board, [(ix, iy), (ix, iy - 0.6)], "BOOST_SNS", 0.3)
+    track(board, [(ix, iy - 0.6), (cx, cy)], "BOOST_SNS", 0.6)
+    track(board, [(ix, iy - 0.6), (rx, ry)], "BOOST_SNS", 0.25)
+    # UVLO: pin 2 straight left into R51's lower pad, on to R96's
+    r96 = {p.GetNumber(): p for p in board.FindFootprintByReference("R96").Pads()}
+    (ux, uy), (ax, ay), (bx, by) = c(u13["2"]), c(r51["2"]), c(r96["1"])
+    track(board, [(ux, uy), (ax + 0.6, uy), (ax, ay), (bx, by)], "U13_UVLO", 0.2)
+    # dV/dt and ILIM share the pocket right of pins 7-8 (0.9 mm to C42's GND pad: room for one track
+    # past C42, not two). ILIM (pin 7) turns down next to the pins and back left under the body to R95;
+    # dV/dt (pin 8) turns down outside it and into C42's top before C42's GND pad.
+    c42 = {p.GetNumber(): p for p in board.FindFootprintByReference("C42").Pads()}
+    r95 = {p.GetNumber(): p for p in board.FindFootprintByReference("R95").Pads()}
+    (dx, dy), (lx, ly) = c(u13["8"]), c(u13["7"])
+    (c1x, c1y), (r1x, r1y) = c(c42["1"]), c(r95["1"])
+    ep_bottom = T(u13["11"].GetBoundingBox().GetBottom())
+    under = ep_bottom + 0.32                   # ILIM's run under the body, 0.22 mm below the exposed pad
+    top42 = T(c42["1"].GetBoundingBox().GetTop())
+    xi, xd = pin_right + 0.3, pin_right + 0.7
+    track(board, [(lx, ly), (xi, ly), (xi, under), (r1x + 0.2, under), (r1x, r1y)], "U13_ILIM", 0.2)
+    track(board, [(dx, dy), (xd, dy), (xd, top42 - 0.25), (c1x, top42 - 0.25), (c1x, c1y)], "U13_DVDT", 0.2)
+    ex = T(u13["11"].GetPosition().x)
+    for n in ("3", "5", "6"):
+        g = u13[n].GetPosition()
+        track(board, [(T(g.x), T(g.y)), (ex, T(g.y))], "GND", 0.25)
+    # every laid item keeps 0.2 mm from every other-net pad on its layer (polygon test, not GetClearance)
+    pads = [q for f in board.GetFootprints() for q in f.Pads()]
+    laid = [t for t in board.GetTracks() if t.m_Uuid.AsString() not in before]
+    for t in laid:
+        grown = pcbnew.SHAPE_POLY_SET()
+        t.TransformShapeToPolygon(grown, pcbnew.F_Cu, mm(0.205), 16, pcbnew.ERROR_INSIDE)   # DRC arcs read 0.2 as 0.197
+        for o in laid:                         # and from each other
+            if o.GetNetname() == t.GetNetname():
+                continue
+            own = pcbnew.SHAPE_POLY_SET()
+            o.TransformShapeToPolygon(own, pcbnew.F_Cu, 0, 16, pcbnew.ERROR_INSIDE)
+            own.BooleanIntersection(grown)
+            assert own.Area() == 0, ("U13 preroute tracks too close", t.GetNetname(), o.GetNetname())
+        for q in pads:
+            if q.GetNetname() == t.GetNetname() or not q.IsOnLayer(pcbnew.F_Cu):
+                continue
+            hit = pcbnew.SHAPE_POLY_SET(grown)
+            hit.BooleanIntersection(q.GetEffectivePolygon(pcbnew.F_Cu, pcbnew.ERROR_INSIDE))
+            assert hit.Area() == 0, ("U13 preroute too close", t.GetNetname(),
+                                     q.GetParentFootprint().GetReference(), q.GetNumber())
 
 
 def preroute_kelvin(board):

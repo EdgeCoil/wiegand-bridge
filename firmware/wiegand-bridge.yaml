@@ -19,9 +19,9 @@ substitutions:
   name: wiegand-bridge
   friendly_name: Wiegand bridge
   # Reader monitor zero (mA): what U12 reads with the reader switch on and NO reader connected -- U13's
-  # operating current (<= 5 mA, no minimum or typical in its datasheet) plus its IN divider (33-67 uA).
-  # 2.5 is mid-range (+-2.6 mA uncalibrated); measure it once per board (docs/design.md, Bench tests 4).
-  reader_zero_ma: "2.5"
+  # operating current (<= 0.48 mA) plus its UVLO divider (~12 uA). 0.25 is mid-range (+-0.25 mA
+  # uncalibrated); measure it once per board for better (docs/design.md, Bench tests 4).
+  reader_zero_ma: "0.25"
 
 esphome:
   name: ${name}
@@ -188,7 +188,7 @@ output:
     pin: GPIO40                  # Q2 -> J11 BEEP (rev 10: moved from IO7, which could not be routed out)
   - platform: gpio
     id: reader_shed
-    pin: GPIO48                  # reader-switch study: IO48 drives Q4, which pulls U13's IN low; turn_on
+    pin: GPIO48                  # IO48 drives Q4, which pulls U13's SHDN low; turn_on
                                  # drives it high = shed. R18 holds Q4 off (reader on) through reset and boot.
   - platform: gpio
     id: status_ok_led
@@ -208,19 +208,6 @@ interval:
             - output.turn_on: status_ok_led
           else:
             - output.turn_off: status_ok_led
-  # On battery, a short that follows open load (FAULT already on: no reader, or < 10-20 mA) gives
-  # reader_fault no new edge, so read the reader terminal every second until the overload is seen,
-  # not at the 30 s poll (audit round 6, S4).
-  - interval: 1s
-    then:
-      - if:
-          condition:
-            and:
-              - binary_sensor.is_on: reader_fault
-              - binary_sensor.is_off: ext_power
-              - binary_sensor.is_off: reader_overload
-          then:
-            - component.update: reader_monitor
 
 
 
@@ -248,10 +235,11 @@ binary_sensor:
     pin: {pca9554: io_exp, number: 3}       # +5V divider, ~2.8 V when present (rev 10: via the expander)
     on_press:
       - output.turn_off: reader_shed        # also ends a shed for an overload on battery (below)
-  # U13 FAULT (open drain, R97 pull-up, R98 to IO9): low while it limits current or sits in its
-  # auto-retry off time, and also on open load (< 10-20 mA) while on. The switch retries by itself
-  # (35-45 ms on, 0.8-1.2 s off); this only reports. It limits for up to ~35 ms while a reader's input
-  # capacitance charges at power-up or plug-in, hence the filter.
+      - globals.set: {id: reader_shed_low_battery, value: 'false'}
+  # U13 FLT (TPS26625, open drain, R97 pull-up, to IO9): low on overload, thermal shutdown, UVLO,
+  # reverse current, while shed, and through its slow start (up to ~0.6 s with the power-good deglitch).
+  # No open-load indication. The eFuse retries by itself; this only reports. A reader plugged into a
+  # live terminal holds the limit for up to ~30 ms. The 1 s filter covers both.
   - platform: gpio
     id: reader_fault
     name: "${friendly_name} reader supply fault"
@@ -261,18 +249,20 @@ binary_sensor:
       number: GPIO9
       inverted: true
     filters:
-      - delayed_on: 200ms
+      - delayed_on: 1s
     on_press:
       - component.update: reader_monitor     # fresh reader-terminal voltage for reader_overload
-  # Overload or short at J3/J21: FAULT with the reader terminal low (open load leaves it at ~12.5 V).
-  # On battery each retry pulls up to ~2.9 A from the cell (docs/design.md, Reader supply), so shed
-  # the reader until external power returns rather than retry once a second.
+  # Overload or short at J3/J21: FLT with the reader terminal low, and not a low-battery shed (which
+  # also holds FLT low with the terminal at 0 V). On battery a fault draws from the cell near the
+  # protection's limit (docs/design.md, Reader supply), so shed the reader until external power
+  # returns rather than let the eFuse retry.
   - platform: template
     id: reader_overload
     name: "${friendly_name} reader supply overload"
     device_class: problem
     lambda: |-
-      return id(reader_fault).state && !isnan(id(reader_v).state) && id(reader_v).state < 9.0f;
+      return id(reader_fault).state && !id(reader_shed_low_battery) && !isnan(id(reader_v).state) &&
+             id(reader_v).state < 9.0f;
     on_press:
       - if:
           condition:
@@ -331,11 +321,11 @@ sensor:
       accuracy_decimals: 1
       filters:
         - multiply: 1000
-        # the shunt also carries U13's operating current and its IN divider (reader_zero_ma, measured
+        # the shunt also carries U13's operating current and its UVLO divider (reader_zero_ma, measured
         # per board). For better than ~1.5 % of reading, add a measured `- multiply:` here from one
         # bench point (docs/design.md, Bench tests 4).
         - offset: -${reader_zero_ma}
-        # shed, the shunt carries ~0.14 mA (R51 through Q4), so the offset alone would read below 0
+        # shed, the shunt carries only U13's shutdown current and the divider, so the offset alone would read below 0
         - clamp:
             min_value: 0
     bus_voltage:
@@ -356,6 +346,7 @@ sensor:
               condition:
                 binary_sensor.is_off: ext_power
               then:
+                - globals.set: {id: reader_shed_low_battery, value: 'true'}
                 - output.turn_on: reader_shed
 
   # Battery thermistor (rev 10, 2026-10-11): U5's TEMP divider (R77 5.1k from +5V, R78 68k, a 10k
@@ -389,6 +380,9 @@ sensor:
       reference_resistance: 10kOhm
 
 globals:
+  - id: reader_shed_low_battery   # a low-battery shed holds FLT low with the terminal at 0 V: not an overload
+    type: bool
+    initial_value: 'false'
   - id: screen_text
     type: std::string
     initial_value: '"Present card or enter code"'

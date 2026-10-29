@@ -127,19 +127,22 @@ at("R19", 145.2, 161.6, 90)
 at("R20", 142.6, 161.6, 90)
 at("R30", 140.4, 162.6, 90)
 at("JP1", 140.6, 165.6, 0)
-# reader-switch study (2026-10-28): U13 in Q11/R52's place, VS/OUT/GND/DELAY (pins 8-5) toward R59 and F1,
-# IN/DIAG_EN/FAULT/CL (1-4) toward R51/Q4; its small parts in the row above F1
-at("U13", 148.8, 166.5, 270)   # 0.8 mm left of the first try: RDR_SW (pin 7) needs a Power-width channel between pins 5-6 and R59.1
-at("C41", 151.95, 163.6, 180)  # VS decoupling, beside pin 8; VS pad toward R59.2 (same net)
-at("R95", 147.6, 169.0, 0)     # CL, by pin 4
-at("R96", 150.65, 169.0, 0)
-at("R97", 154.6, 167.45, 0)     # FAULT pull-up; R96-R97 gap is the RDR_SW channel down to F1.1
-at("R98", 157.6, 167.45, 0)     # FAULT series to IO9
-at("R51", 144.6, 165.6, 90)
+# battery-path study (2026-10-29): U13 is a TPS26625 (VSON-10), unrotated: IN/UVLO/OVP/SHDN/RTN (1-5) down
+# the left, toward C41 above and the UVLO divider and Q4 to the left; OUT/FLT/dVdT/ILIM/GND (10-6) down the
+# right. OUT leaves to the right and drops straight down a lane to F1.1 (route.py); the dVdT and ILIM parts
+# sit in a row under U13, above F1.
+at("U13", 148.3, 166.3, 0)
+at("C41", 147.2, 162.0, 90)    # IN decoupling, above pin 1, between R19 and C19
+at("R51", 145.35, 165.4, 270)   # UVLO divider, left of pin 2
+at("R96", 143.85, 165.4, 90)
+at("R95", 147.8, 169.55, 0)    # ILIM, in the row under U13
+at("C42", 150.8, 169.55, 0)    # dVdT
+at("C43", 154.4, 167.45, 0)    # OUT decoupling, pad 1 beside the RDR_SW lane
+at("R97", 157.6, 167.45, 0)    # FLT pull-up
 at("Q4", 144.6, 169.2, 0)
 at("R17", 141.2, 169.6, 0)
 at("R18", 141.2, 171.6, 0)
-at("F1", 150.8, 171.75, 180)   # pad 1 (RDR_SW) on the right, under the channel; 0.25 mm below R96 for its silk
+at("F1", 150.8, 173.0, 180)    # pad 1 (RDR_SW) on the right, at the foot of the lane; below the R95/C42 row
 
 # --- 6-36 V in, protection, LMR16020 buck to 5 V (bottom right) ----------------------------------
 at("J14", 179.35, 151.5, 180)   # DC jack, mouth at the right edge

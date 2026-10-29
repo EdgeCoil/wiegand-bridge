@@ -28,9 +28,10 @@ Changes from the guide's text, made while assigning real parts (2026-10-11):
     Kelvin sense tabs. It replaces the 0.2 ohm low-side shunt + LMV321 x21 (IO9) and the R31/R32 rail
     divider (IO2). VBUS reads the reader terminal through R82 4.7k with a BAT54 clamp. The reader's
     return is plain GND. IO2 is free.
-  * Reader switch (reader-switch study, 2026-10-28, after audit round 5 S1): U13 TPS1H200A-Q1, a
-    current-limited high-side switch (0.233-0.357 A, auto-retry), replaces Q11/R52. Q4 now pulls its
-    IN low to shed (IO48 high = shed); its FAULT goes to IO9. Block 8 has the requirements.
+  * Reader switch (after audit round 5 S1, then the battery-path study of 2026-10-29 after round 7):
+    U13 TPS26625, an eFuse with a 0.237-0.257 A limit, dV/dt start and auto-retry, replaces Q11/R52.
+    Q4 pulls its SHDN low to shed (IO48 high = shed); its FLT goes to IO9. Q5 is a DMP2035U. Block 8
+    has the requirements.
   * U9 THVD1420 in place of the SP3485: a full fail-safe receiver (idle, open or shorted bus reads
     1), so an idle terminated bus is defined on this node without bias. The 20k weak-bias pair
     (R66/R67) is gone; the 390 ohm JP3/JP4 bias stays for buses whose other nodes need it.
@@ -96,18 +97,19 @@ FP = {
     "soic8_thvd": (WB, "SOIC-8_L4.9-W3.9-P1.27-LS6.0-BL"),      # THVD1420DR (EasyEDA C3235215)
     "sot23_bat54": (WB, "SOT-23-3_L2.9-W1.4-P1.90-LS2.5-BR"),   # BAT54 (EasyEDA C22466368): 1 = A, 3 = K
     "r1206k": (WB, "R_1206_Kelvin"),                            # KiCad R_1206 + net-tied sense pads 3/4
-    "hvssop8_ep": (WB, "EMSOP-8_L3.0-W3.0-P0.65-LS4.9-BL-EP-A"),  # TPS1H200A-Q1 DGN (EasyEDA C2653785), 9 = pad
+    "vson10_ep": (WB, "VSON-10_L3.0-W3.0-P0.50-TL-EP-1"),       # TPS26625 DRC (EasyEDA C2862873), 11 = pad
 }
 
-# Passive part numbers (all JLCPCB Basic)
+# Passive part numbers (JLCPCB Basic unless marked)
 R = {"100": "C22775", "1k": "C21190", "4.7k": "C23162", "5.1k": "C23186", "10k": "C25804",
      "15k": "C22809", "100k": "C25803", "200k": "C25811", "39k": "C23153", "47k": "C25819",
      "8.2k": "C25981", "20k": "C4184", "120": "C22787", "390": "C23151", "68k": "C23231",
-     "10": "C22859", "470": "C23179", "1.5k": "C22843", "6.8k": "C23212", "22k": "C31850"}
+     "10": "C22859", "470": "C23179", "1.5k": "C22843", "6.8k": "C23212", "22k": "C31850",
+     "1M": "C22935", "120k": "C25808", "26.7k": "C22923"}   # 26.7k is Extended
 C = {"100p": ("c0603", "C14858"), "10n": ("c0603", "C57112"), "100n": ("c0603", "C14663"),
      "1u": ("c0603", "C15849"), "10u": ("c0603", "C19702"), "10u25": ("c0805", "C15850"),
      "22u25": ("c0805", "C45783"), "22u25_1206": ("c1206", "C12891"), "22u6": ("c0603", "C59461"),
-     "10u50_1206": ("c1206", "C13585")}
+     "10u50_1206": ("c1206", "C13585"), "680n": ("c0603", "C107067")}   # 680n X7R 16 V, Extended
 
 PARTS = []  # (ref, footprint key, value, lcsc or None (= hand-fitted / not placed), {pad: net})
 
@@ -188,7 +190,7 @@ part("U1", "esp32", "ESP32-S3-WROOM-1-N8R2", "C2913204", {
     "8": "IN1", "9": "IN2", "10": "IN3", "11": "IN4", "12": "TAMPER", "13": "USB_DN", "14": "USB_DP", "15": "TEMP_ADC",
     "18": "SPI_CS", "19": "SPI_MOSI", "20": "SPI_SCK", "21": "SPI_DC",
     "22": "SPI_BL_BUSY", "23": "IO21", "24": "IO47",   # IO47 = green status LED since rev 11
-    "17": "RDR_FLT",   # IO9: U13 FAULT (reader-switch study), via R98
+    "17": "RDR_FLT",   # IO9: U13 FLT (open drain, R97 pull-up)
     "25": "IO48", "27": "IO0",
     "28": "ETH_MISO", "29": "ETH_CS", "30": "ETH_INT", "31": "RS485_DE", "32": "EXP_INT", "33": "IO40",   # IO40 = reader BEEP since rev 10 (IO7 could not be routed out)
     "34": "I2C_SDA", "35": "I2C_SCL", "36": "RS485_RXD", "37": "RS485_DI",
@@ -237,29 +239,29 @@ part("SW3", "tact", "TAMPER", "C318884", {"1": "TAMPER", "4": "GND"})
 part("J8", "hdr2", "TAMPER EXT", None, {"1": "TAMPER", "2": "GND"})
 
 # --- Block 8: reader supply ---------------------------------------------------------------------
-# Requirements (rev 12, reader-switch study 2026-10-28; guaranteed datasheet figures unless marked):
-# - Reader: <= 150 mA at 12 V, J3 and J21 together. Input capacitance 10-220 uF if its current is
-#   resistive, or constant power (<= 1.8 W) once its regulator starts at >= 9 V; 10-180 uF if it draws
-#   a constant 150 mA from 0 V. Each must charge inside U13's 35 ms minimum limit window (ILIM min,
-#   13.7 V: 220 uF at 1.8 W from 9 V takes 24 ms; 220 uF at a constant 150 mA 34.6-36.4 ms, so 180 uF).
-# - ON through reset, boot and OTA with no firmware: Q4 off (R18 to GND), IN pulled up from VS.
-#   Firmware sheds (IO48 high) only on battery; U13 is then in standby (IN = DIAG_EN low, <= 3 uA).
-# - Dead short or overload at J3/J21, any source: U13 limits to 0.233-0.357 A (RCL 6.8k, +-20 %),
-#   auto-retry 35-45 ms on / 0.8-1.2 s off; <= 4.9 W peak, <= 0.26 W average in U13. BOOST_OUT stays
-#   regulated, so nothing else on the board sees the fault. Recovery after the short is removed: by
-#   itself, within one off time (<= 1.2 s). FAULT (open drain) to IO9 for reporting.
-# - On battery, while U13 holds its limit, the boost draws up to 2.9 A from a 3.0 V cell (ILIM max,
-#   VS max, efficiency 0.75 ASSUMED): over the DW01A's 130 mV / 63 mohm = 2.06 A guaranteed minimum
-#   (25 C), and longer than its 20 ms maximum delay. Typical figures leave about 2x margin. NOT MET on
-#   guaranteed figures with one FS8205A; Q13 in parallel with Q6 (Block 9) meets it at 25 C with the
-#   reader alone (96 mV, 26 %), barely with the Wi-Fi peak (120 mV, 8 %), not from a 2.9 V cell or hot
-#   (audit round 6's operating point, with source resistance; VSYS sags and the current rises). ACCEPTED:
-#   a double fault (battery + reader short) may take the board down until external power returns.
-# - Pins within absolute maximum on the worst transient: VS <= 24.4 V (D20 back-feeds through F1 and
-#   the body diode), OUT -3.5..24.4 V; IN/DIAG_EN a divider of VS (always <= VS); DELAY and FAULT
-#   from +3V3 (<= 7 V).
-# - Reader monitor: R59 also carries U13's operating current (<= 5 mA, no minimum or typical given)
-#   and the IN divider (33-67 uA): a bench zero (Bench tests 4) replaces the old fixed 0.08 mA.
+# Requirements (rev 12, battery-path study 2026-10-29 after audit round 7 SF2; guaranteed figures unless
+# marked; the study, ../audit/full/battstudy, is the source of the operating points):
+# - Reader: <= 150 mA at 12 V, J3 and J21 together; constant power (<= 1.8 W) once its regulator starts
+#   at >= 9 V (0.2 A), or a constant 150 mA from 0 V. Input capacitance 10-220 uF.
+# - ON through reset, boot and OTA with no firmware: Q4 off (R18 to GND), U13's SHDN held up by its own
+#   pull-up (2.39-3.1 V against the 1.8 V rising threshold). Firmware sheds (IO48 high) only on battery.
+# - Power-up and plug-in: U13's dV/dt start (C42 680n) ramps OUT at <= 96 V/s, so 220 uF takes <= 21 mA
+#   and the reader's own <= 0.2 A stays under the 0.237 A minimum limit: power-up never enters the limit.
+#   A reader hot-plugged onto a live OUT charges at the limit (18-31 ms), then runs.
+# - Dead short or overload at J3/J21: U13 limits to 0.237-0.257 A (R95 26.7k; TI's table, -40..125 C,
+#   at 1 V across the switch), at most 3.5 W, until thermal shutdown; auto-retry 512 ms later through the
+#   dV/dt start. BOOST_OUT stays regulated. Recovers by itself. FLT (open drain) to IO9.
+# - On battery, the fault's constant power (3.5 W / 0.75 ASSUMED boost efficiency) must keep the DW01A
+#   under its 130 mV minimum trip as a steady state (its delay has no minimum), with the cell loop's
+#   resistance (cell 30, J4 and leads 20, Q5 <= 45 at -2.5 V, copper ~113, FET pair 31.5 + 2 mohm).
+#   Margin at 25 C: +44 % (idle, 3.0 V cell), +16 % (Wi-Fi peak, 2.9 V). NOT MET at 60 C with the Wi-Fi
+#   peak (-2 % at 3.0 V, -13 % at 2.9 V; estimated x1.2 hot RDS, no part gives hot figures), nor from a
+#   cold high-resistance cell with the Wi-Fi peak. Owner's decision 2026-10-29: this residual is accepted
+#   and documented (design.md, Reader supply).
+# - Pins within absolute maximum: OUT -3.5..24.4 V (D20) against the TPS26625's -(60 - VIN)..62 V; U13
+#   blocks reverse current (OUT above IN), so a surge no longer back-feeds BOOST_SNS or U12's inputs.
+#   UVLO <= 1.5 V (5 V pin), FLT from +3V3.
+# - Reader monitor: R59 also carries U13's IQ(ON) (<= 0.48 mA) and the UVLO divider (~12 uA).
 part("U6", "sot6bl", "MT3608", "C84817",
      {"1": "BOOST_SW", "2": "GND", "3": "BOOST_FB", "4": "U6_EN", "5": "VSYS"})
 res("R21", "100k", "VSYS", "U6_EN")
@@ -272,29 +274,34 @@ res("R19", "200k", "BOOST_OUT", "BOOST_FB")
 res("R20", "10k", "BOOST_FB", "GND")
 res("R30", "200k", "BOOST_FB", "JP1_A")
 part("JP1", "sj", "13.2V", None, {"1": "JP1_A", "2": "GND"})
-# reader-switch study (2026-10-28): U13, a current-limited high-side switch, replaces Q11/R52 (audit
-# round 5, S1: a short collapsed BOOST_OUT and ran Q11 linear at 1-9 W). VS after R59, so the INA226's
-# IN+/IN- stay on the boost side. Pin 9 (thermal pad) to GND with vias; dfm_post.py windows its paste.
-part("U13", "hvssop8_ep", "TPS1H200A-Q1", "C2653785",
-     {"1": "RDR_EN", "2": "RDR_EN", "3": "U13_FLT", "4": "U13_CL", "5": "U13_DELAY", "6": "GND",
-      "7": "RDR_SW", "8": "BOOST_SNS", "9": "GND"})
-cap("C41", "100n", "BOOST_SNS")                 # U13 VS, at the pin
-# CL: ILIM = 0.8 V x 2500 / RCL = 0.294 A, +-20 % (>= 0.25 A) -> 0.233-0.357 A with the 1 % resistor.
-# Above the reader's 150 mA (and 1.8 W / 9 V = 0.2 A) at the minimum; the maximum sets the battery draw.
-res("R95", "6.8k", "U13_CL", "GND")
-# DELAY pulled up = auto-retry (thic on 35-45 ms, off 0.8-1.2 s); Vdl(th) >= 2.7 V, pin max 7 V.
-res("R96", "10k", "U13_DELAY", "+3V3")
-# IN and DIAG_EN together, pulled up from VS: IN <= VS always (its absolute maximum; a +3V3 pull-up
-# exceeded VS whenever the boost was not running), and >= VIH 1.8 V from VS 3.6 V (UVLO 3.5-4.0 V)
-# against the 105-272k internal pull-downs. Q4 pulls it low to shed: standby, <= 3 uA.
-res("R51", "100k", "BOOST_SNS", "RDR_EN")
+# battery-path study (2026-10-29, owner's choice): U13 is a TPS26625 eFuse (was a TPS1H200A-Q1, which
+# replaced Q11/R52 after audit round 5). Its limit is tighter (0.237-0.257 A against 0.233-0.357 A) and
+# its dV/dt start keeps inrush out of the limit, so a reader fault or plug-in on battery draws far less
+# from the cell. VIN on BOOST_SNS after R59, so the INA226's IN+/IN- stay on the boost side. RTN, GND and
+# the PowerPAD are tied together (TI sec. 10.4: allowed where input reverse polarity cannot occur, as
+# here, and the pad then sinks into the GND plane); OVP to RTN (unused). dfm_post.py windows its paste.
+part("U13", "vson10_ep", "TPS26625", "C2862873",
+     {"1": "BOOST_SNS", "2": "U13_UVLO", "3": "GND", "4": "RDR_EN", "5": "GND", "6": "GND",
+      "7": "U13_ILIM", "8": "U13_DVDT", "9": "RDR_FLT", "10": "RDR_SW", "11": "GND"})
+cap("C41", "100n", "BOOST_SNS")                 # U13 IN, at the pin
+cap("C43", "100n", "RDR_SW")                    # U13 OUT, >= 0.01 uF (TI)
+# ILIM: 26.7k -> 0.237-0.257 A (TI's table, -40..125 C). Above the reader's 0.2 A at 9 V; as low as the
+# cell loop allows on battery.
+res("R95", "26.7k", "U13_ILIM", "GND")
+# dV/dt: 680n -> OUT ramps at 1.68-2.33 uA x 23.9-25.2 / 680n (+-10 %) = 53-96 V/s; 12.6 V in 0.13-0.24 s.
+cap("C42", "680n", "U13_DVDT")
+# UVLO from VIN: 1M/120k -> on at 11.0-11.5 V, off at 10.2-10.6 V (1.18-1.23 V / 1.09-1.135 V), so the
+# reader connects only once the boost regulates (>= 12.35 V); the pin sees <= 1.5 V.
+res("R51", "1M", "BOOST_SNS", "U13_UVLO")
+res("R96", "120k", "U13_UVLO", "GND")
+# SHDN: internal pull-up (2.39-3.1 V open, >= 1.8 V to enable); Q4 pulls it low to shed (IQ(OFF) <= 25 uA).
 part("Q4", "sot23_2n7002", "2N7002", "C8545", {"1": "Q4_G", "2": "GND", "3": "RDR_EN"})
 res("R17", "100", "IO48", "Q4_G")
 res("R18", "10k", "Q4_G", "GND")     # off through reset: 10k against an S3 weak pull-up (~45k) -> <= 0.6 V
-# FAULT: open drain, low on current limit (and on open load, < 10-20 mA, while on); 4.7k series to the
-# GPIO as TI recommends (sec. 6.3.6.6), pull-up on the device side.
-res("R97", "10k", "U13_FLT", "+3V3")
-res("R98", "4.7k", "U13_FLT", "RDR_FLT")
+# FLT: open drain (rated 62 V), low on overload, thermal shutdown, UVLO, reverse current, while shed (SHDN
+# low), and through the dV/dt start (with its power-good deglitch, up to ~0.6 s). No open-load indication.
+# Straight to the GPIO with a pull-up (the TPS1H200A's 4.7k series resistor, R98, is gone).
+res("R97", "10k", "RDR_FLT", "+3V3")
 part("F1", "f1812", "0.5A", "C516067", {"1": "RDR_SW", "2": "+12V_RDR"})   # fail-safe for a shorted U13
 part("J3", "kf128", "READER PWR", "C474952", {"1": "+12V_RDR", "2": "GND"})   # rev 12: return is plain GND
 part("J10", "kf128", "READER D0 D1", "C474952", {"1": "D0_RAW", "2": "D1_RAW"})
@@ -333,13 +340,15 @@ part("Q6", "sot6br", "FS8205A", "C2830320",
 # rev 12 (reader-switch study, owner's choice 2026-10-28): Q13, a second FS8205A in parallel with Q6,
 # halves the protection path's resistance. The DW01A trips at VM >= 130 mV (25 C, min) after <= 20 ms;
 # with one FS8205A (<= 63 mohm at VGS 2.5 V) that was 2.06 A, under the 2.9 A the boost draws from a
-# 3.0 V cell while U13 holds its maximum limit on a reader short. Two in parallel: <= 31.5 mohm, VM
-# <= 88 mV at that current alone; with the source resistance and VSYS sag, 96-135 mV (Block 8). Neither
+# 3.0 V cell while the TPS1H200A held its maximum limit on a reader short. Kept with the TPS26625 (2026-10-29):
+# with one FS8205A the Wi-Fi case would read ~195 mV. Two in parallel: <= 31.5 mohm (Block 8). Neither
 # part gives hot figures. It also doubles the DW01A's fast short-circuit threshold to >= 26 A
 # (design.md, Battery).
 part("Q13", "sot6br", "FS8205A", "C2830320",
      {"1": "BAT-", "2": "Q6_D", "3": "GND", "4": "OC", "5": "Q6_D", "6": "OD"})
-part("Q5", "sot23_ao3401", "AO3401A", "C15127", {"1": "+5V", "2": "VSYS", "3": "BAT+"})
+# battery-path study (2026-10-29): DMP2035U (<= 45 mohm at -2.5 V, <= 62 at -1.8 V; the AO3401A gave no
+# figure below -2.5 V and VSYS sags toward 2 V in a reader fault on battery). Same SOT-23 pinout.
+part("Q5", "sot23_ao3401", "DMP2035U", "C110499", {"1": "+5V", "2": "VSYS", "3": "BAT+"})
 res("R27", "100k", "+5V", "GND")
 res("R28", "100k", "BAT+", "BAT_SENSE")
 res("R29", "100k", "BAT_SENSE", "GND")
@@ -465,7 +474,7 @@ part("D20", "sma_tvs", "SMAJ15A", "C19077535", {"1": "+12V_RDR", "2": "GND"})   
 # R59: alloy 0.1 ohm, 1 %, +-50 ppm/C (Walter STE1206, C201308; audit round 1: the thick-film C25334 was
 # +-800 ppm/C, 4 mA of drift at 150 mA). 819 mA full scale, 25 uA LSB. Budget (audit round 2), worst
 # case: offset 0.1 mA + drift 0.035 mA + leakage <= 0.003 mA, plus what the shunt also carries with the
-# reader on: U13's I(op) (<= 5 mA, no minimum or typical given) and its IN divider R51 (33-67 uA). The
+# reader on: U13's IQ(ON) (<= 0.48 mA; it was <= 5 mA with the TPS1H200A) and its UVLO divider (~12 uA). The
 # VBUS current (~15 uA through R82) is downstream, so it reads as reader current. The firmware subtracts
 # a zero measured on the bench with no reader (reader_zero_ma); uncalibrated, the 2.5 mA default is
 # within +-2.6 mA. Its drift with temperature is not specified: a reader change must exceed ~5 mA to be
