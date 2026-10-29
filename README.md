@@ -139,7 +139,8 @@ can also pretend to be a reader towards an existing access controller.
 2. Turn on **PCB Assembly**, top side, and upload `wiegand-bridge-bom.csv` and `wiegand-bridge-cpl.csv`.
 3. **Check every polarised part in the placement preview** before confirming: diodes, LEDs, ICs,
    the ESP32 and the USB-C. Look especially at the status LEDs D8 and D23 (D8 changed footprint
-   family in rev 11) and the new U12 (INA226, MSOP-10) and U9 (THVD1420).
+   family in rev 11), U12 (INA226, MSOP-10), U9 (THVD1420), and the new U13 (TPS26625, VSON-10,
+   0.5 mm pitch with an exposed pad; pin 1 top-left at rotation 0) and Q5 (DMP2035U, SOT-23).
 
 JLCPCB doesn't fit the battery connector housing and cell, the OLED module, the barrel jack J14, or
 any unpopulated headers. Add those yourself. J14's footprint is the DC-005 5.5 × 2.0 mm jack (LCSC

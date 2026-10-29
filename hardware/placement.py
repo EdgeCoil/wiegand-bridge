@@ -142,6 +142,7 @@ at("R97", 157.6, 167.45, 0)    # FLT pull-up
 at("Q4", 144.6, 169.2, 0)
 at("R17", 141.2, 169.6, 0)
 at("R18", 141.2, 171.6, 0)
+at("R99", 142.15, 167.77, 0)   # U13 SHDN pull-up (audit round 8, SF1), left of RDR_EN's run
 at("F1", 150.8, 173.0, 180)    # pad 1 (RDR_SW) on the right, at the foot of the lane; below the R95/C42 row
 
 # --- 6-36 V in, protection, LMR16020 buck to 5 V (bottom right) ----------------------------------

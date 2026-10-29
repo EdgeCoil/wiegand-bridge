@@ -235,7 +235,21 @@ binary_sensor:
     pin: {pca9554: io_exp, number: 3}       # +5V divider, ~2.8 V when present (rev 10: via the expander)
     on_press:
       - output.turn_off: reader_shed        # also ends a shed for an overload on battery (below)
+      # FLT stays low through U13's restart (<= ~0.6 s) and reader_v still holds the shed's 0 V: keep
+      # the low-battery flag until FLT is back and the terminal has been read again (audit round 8, S1),
+      # or reader_overload would flash on.
+      - delay: 1s
+      - component.update: reader_monitor
       - globals.set: {id: reader_shed_low_battery, value: 'false'}
+    on_release:
+      # battery_v's on_value_range only fires on crossing 3.0 V: a cell already below it when external
+      # power goes would otherwise not be shed (audit round 8, S1)
+      - if:
+          condition:
+            lambda: 'return id(battery_v).state < 3.0f;'
+          then:
+            - globals.set: {id: reader_shed_low_battery, value: 'true'}
+            - output.turn_on: reader_shed
   # U13 FLT (TPS26625, open drain, R97 pull-up, to IO9): low on overload, thermal shutdown, UVLO,
   # reverse current, while shed, and through its slow start (up to ~0.6 s with the power-good deglitch).
   # No open-load indication. The eFuse retries by itself; this only reports. A reader plugged into a

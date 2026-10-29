@@ -142,43 +142,48 @@ Keep the logger at `INFO` in service. At `DEBUG`, ESPHome logs the Wiegand frame
 ### Reader supply
 
 - **U13 (TPS26625 eFuse)** switches the boost's output to the reader terminals. R95 (26.7 kΩ) sets its
-  current limit to 0.237–0.257 A (guaranteed, −40 to 125 °C). The minimum covers the reader's 150 mA,
+  current limit to 0.237–0.257 A (guaranteed, −40 to 125 °C, with 1 V across the switch; into a hard
+  short TI gives typical figures only, about ±6 %). The minimum covers the reader's 150 mA,
   and 0.2 A at 9 V for a reader that draws constant power. The maximum is as low as the cell can
   supply on battery (below).
 - **Power-up and plug-in:** C42 (680 nF) on `dVdT` ramps the reader's supply up at 53–96 V/s, so it
   reaches 12.6 V in 0.13–0.24 s. Charging 220 µF at that rate takes at most 21 mA, so with the reader's
   own load the current never reaches the limit. R51/R96 hold U13 off until the boost's output passes
-  11.0–11.5 V (off again below 10.2–10.6 V), so the reader connects only once the boost regulates. A
-  reader plugged into a live terminal charges at the limit for up to about 30 ms, then runs.
+  10.7–11.8 V (off again below 9.9–10.9 V, resistor tolerance and pin leakage included), so the reader
+  connects only once the boost regulates. A reader plugged into a live terminal charges at the limit for
+  up to about 35 ms, then runs.
 - **A short or overload** at J3/J21: U13 holds the limit, so the boost stays in regulation and nothing
   else on the board notices. That is at most 3.5 W in U13, until its thermal shutdown; it tries again
   512 ms after cooling, through the same slow ramp. When the short goes, the reader comes back by itself.
   U13's `FLT` (IO9) reports it, and the firmware's *reader supply overload* sensor combines it with the
   reader voltage.
 - **On battery:** the fault's power comes from the cell, through its own resistance, J4 and its leads,
-  the protection FETs (Q6 and Q13 in parallel, ≤ 31.5 mΩ), Q5 and the board's copper (about 113 mΩ
-  with the 1 oz inner layers the ordering asks for). The boost draws constant power, so as `VSYS`
+  the protection FETs (Q6 and Q13 in parallel, ≤ 31.5 mΩ), Q5 (≤ 62 mΩ at −1.8 V) and the board's
+  copper (about 98 mΩ with the 1 oz inner layers the ordering asks for). The boost draws constant power, so as `VSYS`
   sags the cell current rises. The DW01A trips once 130 mV (its guaranteed minimum) appears across
   the protection FETs, and its delay has no guaranteed minimum, so this has to hold as a steady state.
-  Guaranteed worst case, from the battery-path study (2026-10-29):
+  Guaranteed worst case, recomputed on the routed board's copper (audit round 8; the battery-path
+  study of 2026-10-29 estimated the copper at 113 mΩ and gave a few points less in every case):
 
   | Temperature | Idle, 3.0 V cell | Idle, 2.9 V cell | Wi-Fi peak, 3.0 V | Wi-Fi peak, 2.9 V |
   |---|---|---|---|---|
-  | 25 °C | +44 % | +40 % | +22 % | +16 % |
-  | 60 °C (estimated) | +29 % | +24 % | −2 % | −13 % |
-  | −20 °C, cell 90 mΩ | +40 % | +36 % | +13 % | `VSYS` 1.75 V, fails |
+  | 25 °C | +45 % | +41 % | +25 % | +19 % |
+  | 60 °C (estimated) | +31 % | +27 % | +3 % | −6 % |
+  | −20 °C, cell 90 mΩ | +41 % | +38 % | +17 % | +8 % (`VSYS` 1.87 V) |
 
-  (Margins to the trip. The "Wi-Fi peak" is 0.5 A at 3.3 V at the moment of the fault. No part gives
-  figures hot or cold; 60 °C scales the FETs' resistance by 1.2. A cold cell's resistance is assumed.)
+  (Margins to the trip, at a 0.260 A limit; at 0.264 A, TI's typical hard-short spread, 1–3 points less.
+  The "Wi-Fi peak" is 0.5 A at 3.3 V at the moment of the fault. No part gives figures hot or cold;
+  60 °C scales the FETs' resistance by 1.2. A cold cell's resistance is assumed.)
   **So a reader short or plug-in on battery is survived except when it coincides with a Wi-Fi peak on a
-  hot board, or a cold, high-resistance cell**: then the battery protection may switch the board off
+  hot board with a nearly flat cell**: then the battery protection may switch the board off
   until external power returns. Typical parts leave about twice the margin. The firmware sheds the
   reader on battery after an overload, so a short is not retried.
 - **USB alone** (bench use): the board, the charger and a 150 mA reader together already draw about
   1 A, twice a 500 mA port's allowance, fault or not. In a short, about 1.4 A. On USB alone, keep the
   reader under about 50 mA, or run it from 12 V.
-- **Shedding:** IO48 drives Q4, which pulls U13's `SHDN` low (≤ 25 µA). U13 holds `SHDN` up itself,
-  and R18 holds Q4 off through reset, boot and OTA, so the reader stays **on**. The firmware sheds the
+- **Shedding:** IO48 drives Q4, which pulls U13's `SHDN` low (≤ 25 µA, plus R99's 33 µA). R99
+  (100 kΩ to `+3V3`) holds `SHDN` up: U13's own pull-up is specified only at 0.1 µA, less than Q4's
+  leakage. R18 holds Q4 off through reset, boot and OTA, so the reader stays **on**. The firmware sheds the
   reader only on battery: below 3.0 V, or after an overload. (U6 `EN` is tied high. Pulling `EN` low on
   a non-synchronous boost still leaks `VSYS` through to the output.)
 - **F1** (PTC, 0.5 A hold) stays as a fail-safe in case U13 fails short. It never trips in normal
@@ -320,7 +325,9 @@ display shows as a fault on the status LED.
   enclosure. The OLED sits at least 15 mm from it.
 - Switching regulators have windowed paste and thermal vias under their pads.
 - Autorouted with Freerouting, with the input, switch and relay nets kept to the outer layers.
-- Test pads for UART0, BEEP and GND.
+- Test pads on the bottom, under J6: TP1 `TX` (UART0 TX, `RS485_DI`), TP2 `RX` (`RS485_RXD`, behind
+  R85 1 kΩ), TP3 `IO40` (BEEP) and TP4 `GND`, left to right seen from the top (right to left from the
+  bottom).
 
 ## Bench tests
 

@@ -243,21 +243,24 @@ part("J8", "hdr2", "TAMPER EXT", None, {"1": "TAMPER", "2": "GND"})
 # marked; the study, ../audit/full/battstudy, is the source of the operating points):
 # - Reader: <= 150 mA at 12 V, J3 and J21 together; constant power (<= 1.8 W) once its regulator starts
 #   at >= 9 V (0.2 A), or a constant 150 mA from 0 V. Input capacitance 10-220 uF.
-# - ON through reset, boot and OTA with no firmware: Q4 off (R18 to GND), U13's SHDN held up by its own
-#   pull-up (2.39-3.1 V against the 1.8 V rising threshold). Firmware sheds (IO48 high) only on battery.
+# - ON through reset, boot and OTA with no firmware: Q4 off (R18 to GND), U13's SHDN held up by R99
+#   (100k to +3V3, 33 uA) against the 1.8 V rising threshold. U13's own pull-up is specified only at
+#   0.1 uA (audit round 8, SF1): Q4's IDSS and board leakage can exceed that. Firmware sheds (IO48 high)
+#   only on battery.
 # - Power-up and plug-in: U13's dV/dt start (C42 680n) ramps OUT at <= 96 V/s, so 220 uF takes <= 21 mA
 #   and the reader's own <= 0.2 A stays under the 0.237 A minimum limit: power-up never enters the limit.
-#   A reader hot-plugged onto a live OUT charges at the limit (18-31 ms), then runs.
+#   A reader hot-plugged onto a live OUT charges at the limit (up to ~35 ms with JP1, 13.7 V), then runs.
 # - Dead short or overload at J3/J21: U13 limits to 0.237-0.257 A (R95 26.7k; TI's table, -40..125 C,
 #   at 1 V across the switch), at most 3.5 W, until thermal shutdown; auto-retry 512 ms later through the
 #   dV/dt start. BOOST_OUT stays regulated. Recovers by itself. FLT (open drain) to IO9.
 # - On battery, the fault's constant power (3.5 W / 0.75 ASSUMED boost efficiency) must keep the DW01A
 #   under its 130 mV minimum trip as a steady state (its delay has no minimum), with the cell loop's
-#   resistance (cell 30, J4 and leads 20, Q5 <= 45 at -2.5 V, copper ~113, FET pair 31.5 + 2 mohm).
-#   Margin at 25 C: +44 % (idle, 3.0 V cell), +16 % (Wi-Fi peak, 2.9 V). NOT MET at 60 C with the Wi-Fi
-#   peak (-2 % at 3.0 V, -13 % at 2.9 V; estimated x1.2 hot RDS, no part gives hot figures), nor from a
-#   cold high-resistance cell with the Wi-Fi peak. Owner's decision 2026-10-29: this residual is accepted
-#   and documented (design.md, Reader supply).
+#   resistance (cell 30, J4 and leads 20, Q5 <= 62 at -1.8 V, copper ~98 on the routed board (audit round
+#   8, netres: BAT+ 44.7, VSYS 38.4, BAT- 15.1), FET pair 31.5 + 1.4 mohm). Margin (round 8's
+#   recomputation, 0.260 A): at 25 C +45 % (idle, 3.0 V cell) to +19 % (Wi-Fi peak, 2.9 V). NOT MET at
+#   60 C with the Wi-Fi peak from a 2.9 V cell (-6 %; +3 % from 3.0 V; estimated x1.2 hot RDS, no part
+#   gives hot figures). Owner's decision 2026-10-29: this residual is accepted and documented
+#   (design.md, Reader supply).
 # - Pins within absolute maximum: OUT -3.5..24.4 V (D20) against the TPS26625's -(60 - VIN)..62 V; U13
 #   blocks reverse current (OUT above IN), so a surge no longer back-feeds BOOST_SNS or U12's inputs.
 #   UVLO <= 1.5 V (5 V pin), FLT from +3V3.
@@ -290,14 +293,17 @@ cap("C43", "100n", "RDR_SW")                    # U13 OUT, >= 0.01 uF (TI)
 res("R95", "26.7k", "U13_ILIM", "GND")
 # dV/dt: 680n -> OUT ramps at 1.68-2.33 uA x 23.9-25.2 / 680n (+-10 %) = 53-96 V/s; 12.6 V in 0.13-0.24 s.
 cap("C42", "680n", "U13_DVDT")
-# UVLO from VIN: 1M/120k -> on at 11.0-11.5 V, off at 10.2-10.6 V (1.18-1.23 V / 1.09-1.135 V), so the
-# reader connects only once the boost regulates (>= 12.35 V); the pin sees <= 1.5 V.
+# UVLO from VIN: 1M/120k -> on at 11.0-11.5 V, off at 10.2-10.6 V (1.18-1.23 V / 1.09-1.135 V); with 1 %
+# resistors and the pin's +-100 nA, 10.7-11.8 V on and 9.9-10.9 V off (audit round 8, S3), so the reader
+# connects only once the boost regulates (>= ~12.1 V worst case); the pin sees <= 1.5 V.
 res("R51", "1M", "BOOST_SNS", "U13_UVLO")
 res("R96", "120k", "U13_UVLO", "GND")
-# SHDN: internal pull-up (2.39-3.1 V open, >= 1.8 V to enable); Q4 pulls it low to shed (IQ(OFF) <= 25 uA).
+# SHDN: >= 1.8 V to enable (rated 6 V); R99 pulls it to +3V3, Q4 pulls it low to shed (IQ(OFF) <= 25 uA,
+# plus R99's 33 uA).
 part("Q4", "sot23_2n7002", "2N7002", "C8545", {"1": "Q4_G", "2": "GND", "3": "RDR_EN"})
 res("R17", "100", "IO48", "Q4_G")
 res("R18", "10k", "Q4_G", "GND")     # off through reset: 10k against an S3 weak pull-up (~45k) -> <= 0.6 V
+res("R99", "100k", "+3V3", "RDR_EN")
 # FLT: open drain (rated 62 V), low on overload, thermal shutdown, UVLO, reverse current, while shed (SHDN
 # low), and through the dV/dt start (with its power-good deglitch, up to ~0.6 s). No open-load indication.
 # Straight to the GPIO with a pull-up (the TPS1H200A's 4.7k series resistor, R98, is gone).
@@ -349,7 +355,11 @@ part("Q13", "sot6br", "FS8205A", "C2830320",
 # battery-path study (2026-10-29): DMP2035U (<= 45 mohm at -2.5 V, <= 62 at -1.8 V; the AO3401A gave no
 # figure below -2.5 V and VSYS sags toward 2 V in a reader fault on battery). Same SOT-23 pinout.
 part("Q5", "sot23_ao3401", "DMP2035U", "C110499", {"1": "+5V", "2": "VSYS", "3": "BAT+"})
-res("R27", "100k", "+5V", "GND")
+# R27 10k (audit round 8, S4; was 100k): with external power gone, it holds +5V, Q5's gate, low against
+# D11's reverse leakage (SS34: ~75 uA typical at 75 C, only 0.5 mA at 40 V guaranteed), so Q5 keeps
+# VGS near -VSYS in a reader fault on a hot board; it also halves the body-diode time at each handover
+# (C20 10 uF). Costs 0.5 mA from +5V on external power.
+res("R27", "10k", "+5V", "GND")
 res("R28", "100k", "BAT+", "BAT_SENSE")
 res("R29", "100k", "BAT_SENSE", "GND")
 cap("C23", "100n", "BAT_SENSE")
@@ -476,9 +486,10 @@ part("D20", "sma_tvs", "SMAJ15A", "C19077535", {"1": "+12V_RDR", "2": "GND"})   
 # case: offset 0.1 mA + drift 0.035 mA + leakage <= 0.003 mA, plus what the shunt also carries with the
 # reader on: U13's IQ(ON) (<= 0.48 mA; it was <= 5 mA with the TPS1H200A) and its UVLO divider (~12 uA). The
 # VBUS current (~15 uA through R82) is downstream, so it reads as reader current. The firmware subtracts
-# a zero measured on the bench with no reader (reader_zero_ma); uncalibrated, the 2.5 mA default is
-# within +-2.6 mA. Its drift with temperature is not specified: a reader change must exceed ~5 mA to be
-# distinguishable from it on guaranteed figures (every Wiegand/OSDP reader idles well above that); gain
+# a zero measured on the bench with no reader (reader_zero_ma); uncalibrated, the 0.25 mA default is
+# within +-0.25 mA. IQ(ON) is bounded only 0-0.48 mA over -40..125 C, with no drift figure: a 25 C zero
+# can be up to ~0.5 mA out at 60 C on guaranteed figures (audit round 8, S2), so the budget below holds
+# at the zero's temperature and widens by up to 0.5 mA across the range; gain
 # 0.1 % + 0.175 % drift + shunt 1 % + 0.18 % drift (+ <= 0.3 % tab position, estimated). At 150 mA
 # that is about 2.4 mA against 2.5 mA allowed; the tab estimate would take it to ~2.8 mA, over. A
 # one-point gain calibration on the bench (firmware multiply) takes out the shunt's 1 % and the tab
@@ -486,8 +497,9 @@ part("D20", "sma_tvs", "SMAJ15A", "C19077535", {"1": "+12V_RDR", "2": "GND"})   
 # The shunt sits between the boost's output capacitors and the reader switch U13 (audit round 1, S3):
 # IN+ and IN- are on BOOST_OUT / BOOST_SNS, which the 44 uF hold up and which never go negative, even
 # while U13 sheds the reader. (Between the switch and F1 they followed the reader cable through F1
-# whenever it was off.) A positive surge on the reader pair back-feeds through F1 and U13's body diode:
-# both inputs follow it to <= 24.4 V (D20's clamp), inside their 40 V rating.
+# whenever it was off.) A positive surge on the reader pair stops at U13, which blocks reverse current
+# (within 0.31 us of OUT exceeding IN by 2.6 V; ~6.5 A for ~1 us before that, +0.15 V on the 44 uF), so
+# both inputs stay within the boost's own range, inside their 40 V rating.
 # Kelvin connection by net tie (audit round 1, S2): R59's footprint carries a small sense pad inside
 # each land (pads 3/4, net_tie_pad_groups "1, 3" "2, 4"), and U12's sense pins are on nets of their
 # own (ISNS_P / ISNS_N), so no load current can share a sense track. kelvin.py checks the structure.
