@@ -246,7 +246,7 @@ binary_sensor:
   # U13 FLT (TPS26625, open drain, R97 pull-up, to IO9): low on overload, thermal shutdown, UVLO,
   # reverse current, while shed, and through its slow start (up to ~0.7 s with the power-good deglitch).
   # No open-load indication. The eFuse retries by itself; this only reports. A reader plugged into a
-  # live terminal holds the limit for up to ~30 ms. The 1 s filter covers both.
+  # live terminal holds the limit for up to ~35 ms (13.7 V with JP1). The 1 s filter covers both.
   - platform: gpio
     id: reader_fault
     name: "${friendly_name} reader supply fault"

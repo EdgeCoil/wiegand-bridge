@@ -385,8 +385,10 @@ silkscreen before a cell is ever connected.
   `FLT` high once it is done.
 - On battery the firmware sheds the reader for an overload or a cell under 3.0 V, and holds the shed,
   through resets too, until external power returns. So the steps below on the cell start by
-  **clearing the shed**: remove any short from J3, connect the charged cell, apply 12 V for at least
-  10 s (the cleared state reaches flash within about 6 s), then remove the 12 V.
+  **clearing the shed**: unplug USB, remove any short from J3, connect a charged cell, apply 12 V for at
+  least 10 s (the cleared state reaches flash within about 6 s), then remove the 12 V. The cell run
+  down in bench test 3 needs about a day on 12 V to recharge; or use a charged spare. Below 3.0 V the
+  firmware sheds for a low cell instead, and these steps would not behave as written.
 - Battery load (clear the shed first), with Wi-Fi busy, e.g. streaming logs: hot-plug the reader → it
   starts and the board stays up (the plug-in limit lasts up to ~35 ms, well inside the 1 s fault
   filter, so it does not shed). Then short J3 → the board should stay up (see *Reader supply* for when
