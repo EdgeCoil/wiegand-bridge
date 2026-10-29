@@ -27,6 +27,11 @@ esphome:
   name: ${name}
   friendly_name: ${friendly_name}
 
+# Saved values (the reader shed state) reach flash within 5 s of a change, not 60 s. Writes happen only
+# on change, and sheds are rare (audit round 13, S2).
+preferences:
+  flash_write_interval: 5s
+
 esp32:
   board: esp32-s3-devkitc-1
   variant: esp32s3
@@ -265,7 +270,7 @@ binary_sensor:
     # (millis() - reader_released_ms) masks U13's restart after a shed ends: FLT stays low for up to
     # ~0.7 s (ramp plus power-good deglitch) while reader_v still holds the shed's 0 V.
     lambda: |-
-      return id(reader_fault).state && !id(reader_shed_low_battery) &&
+      return id(reader_fault).state && id(reader_shed_state) != 2 &&
              millis() - id(reader_released_ms) > 1500 &&
              !isnan(id(reader_v).state) && id(reader_v).state < 9.0f;
     on_press:
@@ -374,22 +379,18 @@ sensor:
       reference_resistance: 10kOhm
 
 globals:
-  # Reader shed state, written only by script reader_supply_policy (below). reader_shed_low_battery is
-  # true exactly while the reader is shed for a low cell: that holds FLT low with the terminal at 0 V,
-  # which is not an overload.
-  # Both kept in flash (audit round 12, S1): a shed must survive a reboot, and with Wi-Fi or HA down in
-  # an outage ESPHome reboots every 15 min (reboot_timeout). IO48 comes up low (reader on, by R18/R99),
-  # and the policy re-asserts the shed at its first run once the expander has read ext_power. Written
-  # at most once a minute (flash_write_interval): a reboot within a minute of a shed may still retry
-  # once.
-  - id: reader_shed_low_battery
-    type: bool
+  # Reader shed state, written only by script reader_supply_policy (below): 0 = not shed, 1 = shed for
+  # an overload, 2 = shed for a low cell (which holds FLT low with the terminal at 0 V: not an
+  # overload). One value, so flash holds one key and can never pair a stale half with a new one (audit
+  # round 13, S1; it was two bools). Kept in flash (audit round 12, S1): a shed must survive a reboot,
+  # and with Wi-Fi or HA down in an outage ESPHome reboots every 15 min (reboot_timeout). IO48 comes up
+  # low (reader on, by R18/R99), and the policy re-asserts the shed at its first run once the expander
+  # has read ext_power. Written within 5 s of a change (preferences, above); an unclean reset (RESET,
+  # crash, brownout) inside those 5 s may retry once. Clean reboots save first.
+  - id: reader_shed_state
+    type: uint8_t
     restore_value: true
-    initial_value: 'false'
-  - id: reader_is_shed            # IO48 high (the output has no readable state)
-    type: bool
-    restore_value: true
-    initial_value: 'false'
+    initial_value: '0'
   - id: reader_released_ms        # when a shed last ended; reader_overload ignores the restart after it
     type: uint32_t
     initial_value: '0'
@@ -435,30 +436,28 @@ script:
   # - external power present: end any shed (the eFuse may retry; the boost has a supply).
   # - on battery, not shed: shed for a low cell (battery_v < 3.0 V) or for an overload. A shed holds
   #   until external power returns, so a short is not retried from the cell; it is kept in flash and
-  #   re-asserted after a reboot (globals, below).
-  # The shed output and its flags change together here and nowhere else.
+  #   re-asserted after a reboot (globals, above).
+  # The shed output and reader_shed_state change together here and nowhere else.
   - id: reader_supply_policy
     then:
       - lambda: |-
           if (!id(ext_power).has_state()) return;          // expander not read yet (boot)
+          uint8_t &st = id(reader_shed_state);              // 0 none, 1 overload, 2 low cell
+          if (st > 2) st = 0;                               // unknown value from flash: start clean
           if (id(ext_power).state) {
-            if (id(reader_is_shed)) {
+            if (st != 0) {
               id(reader_shed).turn_off();
-              id(reader_is_shed) = false;
-              id(reader_shed_low_battery) = false;
+              st = 0;
               id(reader_released_ms) = millis();
             }
-          } else if (id(reader_is_shed)) {
+          } else if (st != 0) {
             id(reader_shed).turn_on();                      // re-assert: IO48 comes up low after a reboot
-          } else {
-            if (id(battery_v).state < 3.0f) {               // false while NaN (no reading yet)
-              id(reader_shed_low_battery) = true;
-              id(reader_is_shed) = true;
-              id(reader_shed).turn_on();
-            } else if (id(reader_overload).state) {
-              id(reader_is_shed) = true;
-              id(reader_shed).turn_on();
-            }
+          } else if (id(battery_v).state < 3.0f) {          // false while NaN (no reading yet)
+            st = 2;
+            id(reader_shed).turn_on();
+          } else if (id(reader_overload).state) {
+            st = 1;
+            id(reader_shed).turn_on();
           }
   - id: screen_wake
     mode: restart

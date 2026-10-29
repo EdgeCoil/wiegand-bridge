@@ -190,8 +190,10 @@ Keep the logger at `INFO` in service. At `DEBUG`, ESPHome logs the Wiegand frame
   when external power goes). It checks the present state every second, not just on changes, so a
   reboot on a low cell still sheds. A shed holds until external power returns, and is kept in flash,
   so a reboot on battery (ESPHome restarts every 15 min without Wi-Fi or Home Assistant) re-applies it
-  about a second after boot; for that second the reader is on. One consequence: a board shed on
-  battery stays shed through a cell swap until external power returns. (U6 `EN` is tied high.
+  about a second after boot; for that second the reader is on. The shed reaches flash within 5 s: an
+  unclean reset (RESET, a crash, a brownout) inside those 5 s boots unshed, and a short is then shed
+  again by detection a few seconds later. Planned restarts (the 15-minute one, OTA) save first. A board
+  shed on battery stays shed through a cell swap until external power returns. (U6 `EN` is tied high.
   Pulling `EN` low on a non-synchronous boost still leaks `VSYS` through to the output.)
 - **F1** (PTC, 0.5 A hold) stays as a fail-safe in case U13 fails short. It never trips in normal
   service: the reader's 150 mA is under its 0.23 A hold at 85 °C. U13's limit can exceed that hold, so
@@ -390,11 +392,14 @@ silkscreen before a cell is ever connected.
     reader stays shed with no retry (scope `FLT`). Reconnect 12 V → the reader comes back and
     *overload* clears within about 1.5 s.
   - With 12 V on, short J3, then remove the 12 V → shed within about 2 s.
-  - During an overload shed on the cell, press RESET → the reader is shed again about a second after
-    boot.
-  - With a bench supply on J4 at 2.9 V and no external power, press RESET → the reader is shed within
-    about 5 s of boot (at the first battery reading).
-  - During an overload shed, remove 12 V for under a second → shed again within about 1.5 s.
+  - During an overload shed on the cell, wait at least 10 s (the shed is saved within 5 s), then press
+    RESET → the reader is shed again about a second after boot.
+  - Apply and remove 12 V (so no shed is stored), then with a bench supply on J4 at 2.9 V and no
+    external power, press RESET → the reader is shed within about 5 s of boot (at the first battery
+    reading).
+  - During an overload shed on the cell with the short still on, connect 12 V for under a second and
+    remove it → the shed is released, U13 retries into the short, and the reader is shed again within
+    about 2 s.
 - With the reader disconnected → no spurious events for ten minutes.
 - 50 card reads and 20 PINs with no misses. Reset ten times: the reader neither beeps nor flashes.
 
