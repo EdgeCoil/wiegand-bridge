@@ -234,19 +234,7 @@ binary_sensor:
     device_class: power
     pin: {pca9554: io_exp, number: 3}       # +5V divider, ~2.8 V when present (rev 10: via the expander)
     on_press:
-      - output.turn_off: reader_shed        # also ends a shed for an overload on battery (below)
-      # FLT stays low through U13's restart (<= ~0.7 s) and reader_v still holds the shed's 0 V: keep
-      # the low-battery flag until FLT is back and the terminal has been read again (audit round 8, S1),
-      # or reader_overload would flash on.
-      - delay: 1s
-      - component.update: reader_monitor
-      # only if external power is still here: if it went again during the delay, on_release has shed
-      # the reader for a low cell and its flag must stand (audit round 9, S1)
-      - if:
-          condition:
-            binary_sensor.is_on: ext_power
-          then:
-            - globals.set: {id: reader_shed_low_battery, value: 'false'}
+      - script.execute: reader_release      # also ends a shed for an overload on battery (below)
     on_release:
       # battery_v's on_value_range only fires on crossing 3.0 V: a cell already below it when external
       # power goes would otherwise not be shed (audit round 8, S1)
@@ -254,8 +242,7 @@ binary_sensor:
           condition:
             lambda: 'return id(battery_v).state < 3.0f;'
           then:
-            - globals.set: {id: reader_shed_low_battery, value: 'true'}
-            - output.turn_on: reader_shed
+            - script.execute: reader_shed_low_battery_now
   # U13 FLT (TPS26625, open drain, R97 pull-up, to IO9): low on overload, thermal shutdown, UVLO,
   # reverse current, while shed, and through its slow start (up to ~0.7 s with the power-good deglitch).
   # No open-load indication. The eFuse retries by itself; this only reports. A reader plugged into a
@@ -280,9 +267,12 @@ binary_sensor:
     id: reader_overload
     name: "${friendly_name} reader supply overload"
     device_class: problem
+    # (millis() - reader_released_ms) masks U13's restart after a shed ends: FLT stays low for up to
+    # ~0.7 s (ramp plus power-good deglitch) while reader_v still holds the shed's 0 V.
     lambda: |-
-      return id(reader_fault).state && !id(reader_shed_low_battery) && !isnan(id(reader_v).state) &&
-             id(reader_v).state < 9.0f;
+      return id(reader_fault).state && !id(reader_shed_low_battery) &&
+             millis() - id(reader_released_ms) > 1500 &&
+             !isnan(id(reader_v).state) && id(reader_v).state < 9.0f;
     on_press:
       - if:
           condition:
@@ -366,8 +356,7 @@ sensor:
               condition:
                 binary_sensor.is_off: ext_power
               then:
-                - globals.set: {id: reader_shed_low_battery, value: 'true'}
-                - output.turn_on: reader_shed
+                - script.execute: reader_shed_low_battery_now
 
   # Battery thermistor (rev 10, 2026-10-11): U5's TEMP divider (R77 5.1k from +5V, R78 68k, a 10k
   # B3950 NTC on the cell at J4 pins 3-4, or RT1 via JP5) read through R79/R80 (2/3) on IO3.
@@ -400,9 +389,16 @@ sensor:
       reference_resistance: 10kOhm
 
 globals:
-  - id: reader_shed_low_battery   # a low-battery shed holds FLT low with the terminal at 0 V: not an overload
+  # Reader shed state (audit round 10: rebuilt after rounds 8-9 patched a delayed clear that raced the
+  # ext_power triggers). The shed output and this flag change together, only in the two scripts
+  # below, with no delay between them: the flag is true exactly while the reader is shed for a low cell.
+  # A low-battery shed holds FLT low with the terminal at 0 V, which is not an overload.
+  - id: reader_shed_low_battery
     type: bool
     initial_value: 'false'
+  - id: reader_released_ms        # when a shed last ended; reader_overload ignores the restart after it
+    type: uint32_t
+    initial_value: '0'
   - id: screen_text
     type: std::string
     initial_value: '"Present card or enter code"'
@@ -438,6 +434,16 @@ event:
 #   oled: !include wiegand-bridge-oled.yaml
 
 script:
+  - id: reader_release            # end any shed (low battery or overload): external power is back
+    then:
+      - output.turn_off: reader_shed
+      - lambda: |-
+          id(reader_shed_low_battery) = false;
+          id(reader_released_ms) = millis();
+  - id: reader_shed_low_battery_now
+    then:
+      - lambda: id(reader_shed_low_battery) = true;
+      - output.turn_on: reader_shed
   - id: screen_wake
     mode: restart
     then:
