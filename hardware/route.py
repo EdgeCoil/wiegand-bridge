@@ -48,7 +48,12 @@ def thermal_vias(board):
             c = ep.GetPosition()
             for dx in (-1.05, 1.05):
                 via(board, int(c.x + mm(dx)), c.y, gnd)
-        if ref in ("U1", "U2", "U3", "U5"):   # exposed pads (and their vias) join the pours solidly
+        elif ref == "U13":
+            # reader switch: two vias in the exposed pad (a short holds up to 4.9 W for 45 ms)
+            ep = [p for p in fp.Pads() if p.GetNumber() == "9"][0].GetPosition()
+            for dy in (-0.5, 0.5):
+                via(board, ep.x, int(ep.y + mm(dy)), gnd)
+        if ref in ("U1", "U2", "U3", "U5", "U13"):   # exposed pads (and their vias) join the pours solidly
             for p in fp.Pads():
                 if p.GetNetname() == "GND" and p.GetNumber() in ("41", "9", "11"):
                     p.SetLocalZoneConnection(pcbnew.ZONE_CONNECTION_FULL)
@@ -127,6 +132,34 @@ def preroute(board):
     via(board, mm(v2[0]), mm(v2[1]), cc2)
     track(board, [v2, (rx, ry)], "CC2", 0.25)
     preroute_kelvin(board)
+    preroute_rdr_sw(board)
+
+
+def preroute_rdr_sw(board):
+    """Reader-switch study: U13's OUT (pin 7) to F1. Pin 7 sits mid-row at 0.65 mm pitch between
+    BOOST_SNS and GND, so a Power-width track can leave it only straight out, necked to the pad's
+    width; Freerouting found that 2 times in 16 (once via the bottom layer). Out of the pin, then
+    straight down the channel between R96 and R97 (and clear of R59's BOOST_OUT land) into F1 pad 1."""
+    u13 = {p.GetNumber(): p for p in board.FindFootprintByReference("U13").Pads()}
+    f1 = {p.GetNumber(): p for p in board.FindFootprintByReference("F1").Pads()}
+    T = pcbnew.ToMM
+    px, py = T(u13["7"].GetPosition().x), T(u13["7"].GetPosition().y)
+    tip = T(u13["7"].GetBoundingBox().GetRight())
+    fx, fy = T(f1["1"].GetPosition().x), T(f1["1"].GetPosition().y)
+    ftop = T(f1["1"].GetBoundingBox().GetTop())
+    lane = fx - 0.05
+    # the lane's 0.6 mm track keeps 0.2 mm from every other-net pad it passes
+    for r, n in (("R96", "2"), ("R97", "1"), ("R59", "1"), ("U13", "6"), ("U13", "5")):
+        bb = [q for q in board.FindFootprintByReference(r).Pads() if q.GetNumber() == n][0].GetBoundingBox()
+        left, right = T(bb.GetLeft()), T(bb.GetRight())
+        gap = lane - 0.3 - right if right < lane else left - lane - 0.3
+        assert gap >= 0.2, ("RDR_SW lane", r, n, gap)
+    track(board, [(px, py), (tip + 0.3, py)], "RDR_SW", 0.36)
+    # pin 6 (GND) is then walled in by pins 5 and 7 and this track: join it to the exposed pad under the body
+    g = u13["6"].GetPosition()
+    ep = u13["9"].GetPosition()
+    track(board, [(T(g.x), T(g.y)), (T(ep.x), T(g.y))], "GND", 0.36)
+    track(board, [(tip + 0.3, py), (lane, py + lane - tip - 0.3), (lane, ftop + 0.3), (fx, fy)], "RDR_SW", 0.6)
 
 
 def preroute_kelvin(board):

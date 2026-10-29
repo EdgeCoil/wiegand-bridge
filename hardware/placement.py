@@ -127,13 +127,19 @@ at("R19", 145.2, 161.6, 90)
 at("R20", 142.6, 161.6, 90)
 at("R30", 140.4, 162.6, 90)
 at("JP1", 140.6, 165.6, 0)
-at("Q11", 148.6, 165.6, 0)
-at("R52", 152.0, 165.6, 90)
-at("R51", 145.4, 165.6, 90)
+# reader-switch study (2026-10-28): U13 in Q11/R52's place, VS/OUT/GND/DELAY (pins 8-5) toward R59 and F1,
+# IN/DIAG_EN/FAULT/CL (1-4) toward R51/Q4; its small parts in the row above F1
+at("U13", 148.8, 166.5, 270)   # 0.8 mm left of the first try: RDR_SW (pin 7) needs a Power-width channel between pins 5-6 and R59.1
+at("C41", 151.95, 163.6, 180)  # VS decoupling, beside pin 8; VS pad toward R59.2 (same net)
+at("R95", 147.6, 169.0, 0)     # CL, by pin 4
+at("R96", 150.65, 169.0, 0)
+at("R97", 154.6, 167.45, 0)     # FAULT pull-up; R96-R97 gap is the RDR_SW channel down to F1.1
+at("R98", 157.6, 167.45, 0)     # FAULT series to IO9
+at("R51", 144.6, 165.6, 90)
 at("Q4", 144.6, 169.2, 0)
 at("R17", 141.2, 169.6, 0)
 at("R18", 141.2, 171.6, 0)
-at("F1", 150.8, 170.4, 0)
+at("F1", 150.8, 171.75, 180)   # pad 1 (RDR_SW) on the right, under the channel; 0.25 mm below R96 for its silk
 
 # --- 6-36 V in, protection, LMR16020 buck to 5 V (bottom right) ----------------------------------
 at("J14", 179.35, 151.5, 180)   # DC jack, mouth at the right edge
@@ -179,6 +185,7 @@ at("R25", 154.0, 114.4, 90)
 at("C22", 154.0, 117.6, 90)
 at("R26", 160.6, 116.8, 90)
 at("Q6", 164.6, 113.6, 0)
+at("Q13", 168.7, 114.2, 0)     # rev 12: second FS8205A in parallel with Q6, same orientation, beside it (clear of K1)
 at("Q5", 150.6, 130.8, 0)
 at("R27", 157.0, 133.5, 0)
 at("R28", 148.0, 125.0, 90)
@@ -215,8 +222,8 @@ at("D15", 131.5, 180.0, 0)      # D0/D1 at J10
 at("D16", 127.0, 180.2, 0)      # LED/BEEP at J11 (rev 11: up, clear of the terminal labels)
 at("D17", 124.6, 137.5, 90)     # IN1/IN2
 at("D18", 124.6, 143.0, 90)     # IN3/IN4
-at("R59", 154.2, 164.0, 90)     # rev 12: shunt between C18/C19 and Q11's source (audit round 1, S3)
-at("U12", 159.0, 164.0, 90)     # rev 12: INA226 beside the shunt, sense pins toward it (1 mm for the sense routes)
+at("R59", 154.7, 164.0, 90)     # rev 12: shunt between C18/C19 and Q11's source (audit round 1, S3)
+at("U12", 159.3, 164.0, 90)     # rev 12: INA226 beside the shunt, sense pins toward it (1 mm for the sense routes)
 at("C39", 158.4, 159.7, 0)      # at U12's VS end
 at("R82", 156.7, 170.2, 90)     # VBUS series 4.7k, from the F1/J3 side (clear of R75)
 at("D27", 159.0, 169.8, 0)      # VBUS clamp
@@ -224,9 +231,9 @@ at("D27", 159.0, 169.8, 0)      # VBUS clamp
 # --- datasheet-review additions (rev 10) -----------------------------------------------------------
 at("D21", 124.6, 148.5, 90)
 at("D22", 124.6, 154.0, 90)
-at("D20", 151.2, 174.6, 0)
+at("D20", 146.0, 176.0, 90)     # reader-switch re-place: beside F1 pad 2 (+12V_RDR), toward J3, clear of F1
 at("R75", 155.2, 170.0, 90)
-at("R76", 169.6, 113.8, 0)
+at("R76", 161.2, 113.55, 90)     # reader-switch re-place: left of Q6, making room for Q13
 at("RN1", 146.2, 121.0, 90)
 at("RN2", 129.4, 116.6, 90)
 at("RN3", 129.4, 120.7, 90)
@@ -245,5 +252,5 @@ at("R78", 161.6, 131.0, 90)
 at("R79", 161.6, 134.4, 90)
 at("R80", 159.6, 137.0, 0)
 at("RT1", 174.6, 112.6, 0)
-at("JP5", 174.4, 115.2, 0)
+at("JP5", 172.3, 115.2, 0)     # reader-switch re-place: 2.1 mm left, clear of Q13; its label now on its right
 at("C40", 110.8, 122.4, 90)     # ADC filter at U1 pad 15 (IO3)

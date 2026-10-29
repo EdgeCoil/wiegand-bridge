@@ -6,20 +6,27 @@ connects to what; this document explains it.
 **Revision 12** (the files in this repository, not yet ordered) is revision 11 (also never ordered)
 with two blocks redrawn around integrated parts, from a passive-to-IC audit:
 - **Reader monitor:** U12, an INA226 on I²C (0x40), reading R59, a 0.1 Ω alloy shunt (±1 %,
-  ±50 ppm/°C) between the boost's output capacitors and the shed switch Q11. It replaces the 0.2 Ω
+  ±50 ppm/°C) between the boost's output capacitors and the reader switch U13. It replaces the 0.2 Ω
   low-side shunt with an LMV321 (×21) on IO9 and the R31/R32 rail divider on IO2. The LMV321's offset
   is specified in millivolts against a 30 mV full scale, 5 mA of error per millivolt. On guaranteed
   figures, uncalibrated, the reading is now within about 0.25 mA + 1.5 % of reading (about 2.4 mA at
-  150 mA). The firmware subtracts the 0.08 mA of gate drive and VBUS current the shunt also carries.
-  A one-point bench calibration (Bench tests, 4) takes out the shunt's 1 %. The reader's return
-  is plain ground (the shunt no longer lifts it), and IO2 and IO9 are free.
+  150 mA), plus the switch's own operating current, which the shunt also carries (up to 5 mA; its
+  datasheet gives no minimum or typical). The firmware subtracts a per-board zero measured with no
+  reader connected, and a one-point bench calibration takes out the shunt's 1 % (Bench tests, 4). The
+  reader's return is plain ground (the shunt no longer lifts it), and IO2 is free.
   - **Kelvin sensing by construction:** R59's footprint has a small sense tab on each land, net-tied to
     it, and U12's IN+/IN− are on nets of their own (`ISNS_P`/`ISNS_N`), laid by `route.py`. No load
     current can share a sense track. `kelvin.py` checks it.
-  - **Inputs never go negative:** the shunt sits on the boost side of Q11, where the 44 µF hold
+  - **Inputs never go negative:** the shunt sits on the boost side of U13, where the 44 µF hold
     IN+/IN− up even while the reader is shed. U12's VBUS input reads the reader terminal through R82
     4.7 kΩ, with D27 (BAT54) holding it above the pin's −0.3 V limit when the field wire swings
     negative.
+- **Reader switch:** U13, a TPS1H200A-Q1 current-limited high-side switch, replaces the Q11 P-FET
+  (and R52). Audit round 5 found that a short on the reader terminal pulled the boost's output down to
+  `VSYS` through L3 and D10, which no switch after it could stop, and ran Q11 linear at 1–9 W while
+  F1 took seconds to trip or never did. U13 holds the reader current at 0.23–0.36 A, so the boost
+  stays in regulation, and retries by itself every second. Its fault output goes to IO9. See *Reader
+  supply* below.
 - **RS-485:** U9 is a THVD1420, whose receiver has full fail-safe: an idle, open or shorted bus reads
   as a 1, so this node needs no bias of its own. The 20k weak-bias pair is gone; the 390 Ω JP3/JP4
   strong bias stays, for buses whose other nodes need it. R83/R84 (10 Ω) sit between the SM712 and
@@ -86,7 +93,7 @@ Keep the logger at `INFO` in service. At `DEBUG`, ESPHome logs the Wiegand frame
                                        +5V ─► U5 CN3058E charger ─► LiFePO4 cell ─► Q5 ──────────────┤
                                                                                                       │
                                                    U6 MT3608 boost, 12.6 V (13.2 V with JP1) ◄────────┘
-                                                        └─► 0.1 Ω ─► Q11 shed switch ─► F1 PTC ─► J3 reader +12V
+                                                        └─► 0.1 Ω ─► U13 switch (0.29 A limit) ─► F1 PTC ─► J3 reader +12V
                                                                       (U12 INA226 reads the shunt and the J3 voltage, I²C)
 
  ESP32-S3-WROOM-1-N8R2
@@ -124,17 +131,51 @@ Keep the logger at `INFO` in service. At `DEBUG`, ESPHome logs the Wiegand frame
   whole cell range.
 - **The reader's supply is always regulated.** U6 (MT3608) boosts `VSYS` to 12.6 V, or 13.2 V with
   JP1 bridged, whichever source is present. U12 (INA226, I²C 0x40) reads the reader current through
-  R59 (0.1 Ω, between the boost's capacitors and Q11). It also reads the voltage at the reader
-  terminal itself (after F1, through R82 4.7 kΩ), so a tripped F1 shows as a low supply rather than
-  a missing reader. 0x40 is also the default of several Qwiic parts (HTU21D, Si7021, HDC1080,
-  PCA9685): don't fit one of those on J18 without moving its address. **Specify the reader at
-  ≤ 150 mA at 12 V**: U6
-  could supply more, but the battery path, the DW01A over-current trip and F1's hot-enclosure
-  derating all assume ≤ 150 mA.
-- **Reader shedding:** Q11, a high-side P-FET after U6, driven by Q4 from IO48. R18 (10 k to `+3V3`)
-  holds it **on** through reset, boot and OTA; firmware sheds the reader only on battery. (U6 `EN` is
-  tied high. Pulling `EN` low on a non-synchronous boost still leaks `VSYS` through to the output.)
-- **F1** (PTC) limits a short on the reader lead, so it can't take the board down.
+  R59 (0.1 Ω, between the boost's capacitors and U13). It also reads the voltage at the reader
+  terminal itself (after F1, through R82 4.7 kΩ), so a tripped F1 or a switch in its current limit
+  shows as a low supply rather than a missing reader. 0x40 is also the default of several Qwiic parts
+  (HTU21D, Si7021, HDC1080, PCA9685): don't fit one of those on J18 without moving its address.
+  **Specify the reader at ≤ 150 mA at 12 V** (J3 and J21 together).
+
+### Reader supply
+
+- **U13 (TPS1H200A-Q1)** switches the boost's output to the reader terminals. R95 (6.8 kΩ) sets its
+  current limit to 0.294 A, ±20 %: 0.233–0.357 A. The minimum covers the reader's 150 mA, and
+  0.2 A at 9 V for a reader that draws constant power. The maximum sets what a fault costs.
+- **A short or overload** at J3/J21: U13 holds the limit, so the boost stays in regulation and nothing
+  else on the board notices. After 35–45 ms in the limit it switches off for 0.8–1.2 s, then tries
+  again (auto-retry, DELAY pulled up by R96). That is up to 4.9 W in U13 per attempt, about 0.26 W on
+  average. When the short goes, the reader comes back by itself at the next attempt, within 1.2 s.
+  U13's `FAULT` (IO9) reports it, and the firmware's *reader supply overload* sensor combines it with
+  the reader voltage.
+- **Inrush:** the limit also charges a reader's input capacitors at power-up and when one is plugged
+  in, and it must finish within the 35 ms window. That holds for 10–220 µF if the reader's current is
+  resistive, or constant power once its regulator starts at 9 V or more. It holds for 10–180 µF if it
+  draws a constant 150 mA from 0 V. A reader whose regulator starts below about 8 V at full power
+  cannot get past the limit.
+- **On battery: Q13, a second FS8205A in parallel with Q6.** While U13 holds 0.36 A at 13.7 V, the
+  boost draws up to about 2.9 A from a 3.0 V cell. The DW01A's over-current trip is guaranteed only
+  above 130 mV across the protection FETs, after at most 20 ms (no minimum), and every retry window is
+  longer than that. One FS8205A (≤ 63 mΩ at 2.5 V gate) would trip from 2.06 A; with Q13 the pair is
+  ≤ 31.5 mΩ and the worst case is 88 mV (+32 % margin at 25 °C, +19 % with the board's 1.6 W Wi-Fi
+  peak). Neither part gives figures when hot, so the margin there is unproven; typical parts leave
+  several times more. Inrush on battery stays in the limit for up to 14 ms (220 µF). The firmware sheds
+  the reader on battery after the first overload, so a short costs one retry window, not one a second.
+- **USB alone** (bench use): the board, the charger and a 150 mA reader together already draw about
+  1 A, twice a 500 mA port's allowance, fault or not. In a short the switch holds it to about
+  2–2.3 A for ≤ 45 ms in each 0.85 s. On USB alone, keep the reader under about 50 mA, or run it
+  from 12 V.
+- **Shedding:** IO48 drives Q4, which pulls U13's `IN` (and `DIAG_EN`) low, so U13 is in standby
+  (≤ 3 µA). R51 pulls `IN` up from the boost's output, never above U13's own supply, which its
+  rating requires. R18 holds Q4 off through reset, boot and OTA, so the reader stays **on**. The
+  firmware sheds the reader only on battery: below 3.0 V, or after an overload. (U6 `EN` is tied high.
+  Pulling `EN` low on a non-synchronous boost still leaks `VSYS` through to the output.)
+- **F1** (PTC, 0.5 A hold) stays as a fail-safe in case U13 fails short. It never trips in normal
+  service: the reader's 150 mA is under its 0.23 A hold at 85 °C. U13's limit is above that hold,
+  but only for 45 ms in each 0.85 s.
+- **Surges** on the reader pair: D20 holds the terminal between about −3.5 V and 24.4 V. Upward,
+  current flows back through F1 and U13 into the boost's capacitors, so `VS` and U12's inputs follow
+  it to about 24 V, within their 42 V and 40 V ratings.
 
 ### Battery — LiFePO4 only
 
@@ -144,7 +185,8 @@ Keep the logger at `INFO` in service. At `DEBUG`, ESPHome logs the Wiegand frame
   not `BAT−`, which floats when the protection FETs open.
 - **Charging is gated by a 10 k B3950 NTC taped to the cell.** No thermistor connected = no charging
   (fail-safe). Bridge **JP5** to use the on-board RT1 instead, which then measures the board, not the cell.
-- **Protection:** DW01A + FS8205A (over-discharge about 2.4 V, over-current, short circuit).
+- **Protection:** DW01A + two FS8205A in parallel (Q6, Q13; over-discharge about 2.4 V, over-current,
+  short circuit). Q13 is there for the reader-short case (see *Reader supply*).
 - **Charge current ~120 mA** (R50 10 k), chosen for a sealed enclosure.
 - **Suggested cell:** a 26650 LiFePO4, 2.5–3.3 Ah, with tabs or leads (not a spring holder), and no
   protection board of its own (the board provides it).
@@ -155,8 +197,14 @@ Keep the logger at `INFO` in service. At `DEBUG`, ESPHome logs the Wiegand frame
 
 **D0/D1:** `74LVC2G17` Schmitt buffer (5.5 V-tolerant inputs at 3.3 V). Each line has 1 kΩ + 5.1 V
 zener (12 V on a data wire is clamped to about 5.3 V), 100 pF (RC ≈ 100 ns against 20–100 µs
-Wiegand pulses), and 10 kΩ to `+3V3` (so there are no spurious reads with the reader shed or
-unplugged). SM712 surge protection sits at the terminals.
+Wiegand pulses), and 22 kΩ to `+3V3` (so there are no spurious reads with the reader shed or
+unplugged). SM712 surge protection sits at the terminals. **The reader's outputs must pull a line to
+0.68 V or lower at the terminal**: the node sits 1/23 of the way from there to `+3V3`, against the
+buffer's 0.8 V minimum low threshold (with 10 kΩ, before rev 12's round 5, it was 0.54 V). Readers with
+open-collector or open-drain outputs meet it. A reader without pull-ups of its own rises through
+22 kΩ to `+3V3`: keep its cable under about 6 nF for SIA's 200 µs pulse interval (counted as the gap
+between pulses), or about 30 nF at the usual 1 ms (with the datasheet-maximum 16 µA of leakage on the
+node and VT+ 2.18 V at 3.24 V; at 130 pF/m about 45 m and 230 m).
 
 **LED and BEEP:** readers take these as active-low inputs with an internal pull-up. The 2N7002 open
 drain has a 100 Ω gate resistor and a 100 kΩ gate pull-down, so **the reader stays silent through
@@ -197,7 +245,7 @@ be tested.
 | IO6 | Reader LED | Q1 |
 | IO40 | Reader BEEP | Q2 |
 | IO8 | Tamper | low = lid on |
-| IO9 | — | free since rev 12 |
+| IO9 | Reader switch fault | U13 `FAULT`, open drain via R98; low = overload, short or open load |
 | IO10 / 11 / 12 / 13 | SPI CS / MOSI / SCK / DC | J6 |
 | IO14 | TFT backlight **or** e-paper BUSY | J6 |
 | IO15–IO18 | IN1–IN4 | via Q7–Q10 |
@@ -207,7 +255,7 @@ be tested.
 | IO39 | Expander interrupt | U8 `INT` |
 | IO41 / IO42 | I²C SDA / SCL | |
 | IO47 | Green `OK` LED | sinks D23 via R81 (rev 10: display reset to J6) |
-| IO48 | Reader shed | high (default) = reader on |
+| IO48 | Reader shed | high = shed (via Q4); low or undriven = reader on (R18) |
 | TXD0 / RXD0 | RS-485 | logs go over USB instead |
 | IO19 / IO20 | USB D− / D+ | J1 |
 
@@ -285,12 +333,21 @@ silkscreen before a cell is ever connected.
   cuts off at about 2.4 V. Shedding and restoring the reader produces no spurious reads.
 
 **4. Reader** (12 V, GND, D0, D1 wired; reader in 26-bit Wiegand mode)
+- Zero the reader monitor first: set `reader_zero_ma` to 0 in the firmware, and with no reader
+  connected and the reader not shed, read the reported reader current. Set `reader_zero_ma` to that
+  value (the default is 2.5). It is U13's own operating current, up to 5 mA. The *reader supply
+  fault* sensor is on with no reader connected (open load); that is expected.
 - Reader current shows its idle draw; ≤ 150 mA with backlight and beep. Unplugging the reader shows
   as a current change, which is your "reader removed" signal.
 - Calibrate the reader monitor once: measure the reader's current with a meter in series and
   compare it with the reported value. Add the ratio as a `multiply` filter on the ina226 current in
   the firmware.
-- Short the reader's `+12V` to `GND` → F1 or U6 limits, and the board stays up.
+- Short the reader's `+12V` to `GND` (12 V supply, limit 1.5 A: each retry draws about 0.9 A) → the
+  *reader supply overload* sensor turns on, the reader supply reads near 0 V, and the board stays up
+  with `+5V`, `VSYS` and the 12.6 V boost steady. U13 gets warm, not hot. Remove the short → the
+  reader is back within about 1.2 s. On the battery alone the board should stay up (Q13 halves the
+  protection's sense resistance); try it with a spare cell, since if the DW01A does trip, external
+  power is needed to recover (see *Reader supply*).
 - With the reader disconnected → no spurious events for ten minutes.
 - 50 card reads and 20 PINs with no misses. Reset ten times: the reader neither beeps nor flashes.
 

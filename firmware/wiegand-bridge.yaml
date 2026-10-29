@@ -18,6 +18,10 @@
 substitutions:
   name: wiegand-bridge
   friendly_name: Wiegand bridge
+  # Reader monitor zero (mA): what U12 reads with the reader switch on and NO reader connected -- U13's
+  # operating current (<= 5 mA, no minimum or typical in its datasheet) plus its IN divider (33-67 uA).
+  # 2.5 is mid-range (+-2.6 mA uncalibrated); measure it once per board (docs/design.md, Bench tests 4).
+  reader_zero_ma: "2.5"
 
 esphome:
   name: ${name}
@@ -184,9 +188,8 @@ output:
     pin: GPIO40                  # Q2 -> J11 BEEP (rev 10: moved from IO7, which could not be routed out)
   - platform: gpio
     id: reader_shed
-    pin:
-      number: GPIO48
-      inverted: true             # R18 holds IO48 high = reader on; turn_on drives it low = shed
+    pin: GPIO48                  # reader-switch study: IO48 drives Q4, which pulls U13's IN low; turn_on
+                                 # drives it high = shed. R18 holds Q4 off (reader on) through reset and boot.
   - platform: gpio
     id: status_ok_led
     pin:
@@ -231,7 +234,38 @@ binary_sensor:
     device_class: power
     pin: {pca9554: io_exp, number: 3}       # +5V divider, ~2.8 V when present (rev 10: via the expander)
     on_press:
-      - output.turn_off: reader_shed
+      - output.turn_off: reader_shed        # also ends a shed for an overload on battery (below)
+  # U13 FAULT (open drain, R97 pull-up, R98 to IO9): low while it limits current or sits in its
+  # auto-retry off time, and also on open load (< 10-20 mA) while on. The switch retries by itself
+  # (35-45 ms on, 0.8-1.2 s off); this only reports. It limits for up to ~35 ms while a reader's input
+  # capacitance charges at power-up or plug-in, hence the filter.
+  - platform: gpio
+    id: reader_fault
+    name: "${friendly_name} reader supply fault"
+    device_class: problem
+    entity_category: diagnostic
+    pin:
+      number: GPIO9
+      inverted: true
+    filters:
+      - delayed_on: 200ms
+    on_press:
+      - component.update: reader_monitor     # fresh reader-terminal voltage for reader_overload
+  # Overload or short at J3/J21: FAULT with the reader terminal low (open load leaves it at ~12.5 V).
+  # On battery each retry pulls up to ~2.9 A from the cell (docs/design.md, Reader supply), so shed
+  # the reader until external power returns rather than retry once a second.
+  - platform: template
+    id: reader_overload
+    name: "${friendly_name} reader supply overload"
+    device_class: problem
+    lambda: |-
+      return id(reader_fault).state && !isnan(id(reader_v).state) && id(reader_v).state < 9.0f;
+    on_press:
+      - if:
+          condition:
+            binary_sensor.is_off: ext_power
+          then:
+            - output.turn_on: reader_shed
   - platform: gpio
     name: "${friendly_name} battery charging"
     device_class: battery_charging
@@ -265,11 +299,12 @@ sensor:
   - platform: wifi_signal
     name: "${friendly_name} RSSI"
     update_interval: 300s
-  # rev 12: reader monitor U12 INA226 (0x40), 0.1 ohm shunt between the boost and the shed switch;
-  # its bus voltage is the reader terminal (after F1, through 4.7k), so a tripped F1 reads as a low
-  # supply, not a missing reader. 0x40 is also the default of several Qwiic parts (HTU21D, Si7021,
-  # HDC1080, PCA9685): don't add one of those on J18 without moving it.
+  # rev 12: reader monitor U12 INA226 (0x40), 0.1 ohm shunt between the boost and the reader switch
+  # U13; its bus voltage is the reader terminal (after F1, through 4.7k), so a tripped F1 or a switch in
+  # its current limit reads as a low supply, not a missing reader. 0x40 is also the default of several
+  # Qwiic parts (HTU21D, Si7021, HDC1080, PCA9685): don't add one of those on J18 without moving it.
   - platform: ina226
+    id: reader_monitor
     i2c_id: bus_a
     address: 0x40
     shunt_resistance: 0.1 ohm
@@ -277,19 +312,21 @@ sensor:
     adc_averaging: 16
     update_interval: 30s
     current:
+      id: reader_i
       name: "${friendly_name} reader current"
       unit_of_measurement: mA
       accuracy_decimals: 1
       filters:
         - multiply: 1000
-        # the shunt also carries Q11's gate drive (R52/R51, 63 uA while the reader is on) and U12's VBUS
-        # input current (~15 uA through R82): subtract them. For better than ~1.5 % of reading, add a
-        # measured `- multiply:` here from one bench point (docs/design.md, Bench tests 4).
-        - offset: -0.08
-        # with the reader shed neither current flows, so the offset alone would read -0.08 mA
+        # the shunt also carries U13's operating current and its IN divider (reader_zero_ma, measured
+        # per board). For better than ~1.5 % of reading, add a measured `- multiply:` here from one
+        # bench point (docs/design.md, Bench tests 4).
+        - offset: -${reader_zero_ma}
+        # shed, the shunt carries ~0.14 mA (R51 through Q4), so the offset alone would read below 0
         - clamp:
             min_value: 0
     bus_voltage:
+      id: reader_v
       name: "${friendly_name} reader supply"
   - platform: adc
     id: battery_v

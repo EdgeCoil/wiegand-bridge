@@ -162,7 +162,7 @@ def labels(board):
     for ref, name, dx, dy in (("D7", "PWR", 4.2, 0), ("D23", "OK", 3.9, 0), ("D8", "FAULT", 4.9, 0),
                               ("D12", "CHG", 0, 2.1), ("JP1", "13V2", 0.4, 2.25), ("J1", "USB-C", 0, 6.0),
                               ("JP2", "TERM", 0.6, 2.6), ("J18", "QWIIC", 0, 3.4), ("J14", "DC IN", -6.0, -4.5),
-                              ("JP5", "NTC", -3.2, 0.3)):
+                              ("JP5", "NTC", 3.2, 0.3)):
         f = board.FindFootprintByReference(ref).GetPosition()
         text(board, name, pcbnew.ToMM(f.x) + dx, pcbnew.ToMM(f.y) + dy, 0.8)
     f = board.FindFootprintByReference("JP3").GetPosition()   # no room on top: label the bias jumpers underneath

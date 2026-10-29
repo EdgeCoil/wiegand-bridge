@@ -56,7 +56,7 @@ def body(fp):
         boxes = [_bb(g) for g in fp.GraphicalItems() if g.GetLayer() == layer and g.GetClass() == "PCB_SHAPE"]
         if boxes:
             u = _union(boxes)
-            if u[2] > u[0] and u[3] > u[1]:
+            if min(u[2] - u[0], u[3] - u[1]) > 0.7:   # K1's F.Fab is one 0.6 mm line, not a body (0603s are 0.8)
                 return u
     bb = fp.GetBoundingBox(False)
     return (ToMM(bb.GetLeft()), ToMM(bb.GetTop()), ToMM(bb.GetRight()), ToMM(bb.GetBottom()))

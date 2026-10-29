@@ -18,7 +18,7 @@ import pcbnew
 HERE = os.path.dirname(os.path.abspath(__file__))
 PCB = os.path.join(HERE, "wiegand-bridge.kicad_pcb")
 mm, ToMM = pcbnew.FromMM, pcbnew.ToMM
-EP = {"U2": "9", "U3": "11", "U5": "9"}
+EP = {"U2": "9", "U3": "11", "U5": "9", "U13": "9"}
 DIODE_POUR = {"D1": 2.2, "D3": 2.0, "D11": 2.0}     # extra copper around each non-GND pad, mm
 
 
