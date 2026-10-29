@@ -245,7 +245,8 @@ part("J8", "hdr2", "TAMPER EXT", None, {"1": "TAMPER", "2": "GND"})
 #   at >= 9 V (0.2 A), or a constant 150 mA from 0 V. Input capacitance 10-220 uF.
 # - ON through reset, boot and OTA with no firmware: Q4 off (R18 to GND), U13's SHDN held up by R99
 #   (100k to +3V3, 33 uA) against the 1.8 V rising threshold. U13's own pull-up is specified only at
-#   0.1 uA (audit round 8, SF1): Q4's IDSS and board leakage can exceed that. Firmware sheds (IO48 high)
+#   0.1 uA (audit round 8, SF1): Q4's IDSS (<= 80 nA at 25 C, no hot figure) and leakage across the
+#   pin's 0.2 mm gaps can exceed that. R99 tolerates 14 uA. Firmware sheds (IO48 high)
 #   only on battery.
 # - Power-up and plug-in: U13's dV/dt start (C42 680n) ramps OUT at <= 96 V/s, so 220 uF takes <= 21 mA
 #   and the reader's own <= 0.2 A stays under the 0.237 A minimum limit: power-up never enters the limit.
@@ -298,14 +299,14 @@ cap("C42", "680n", "U13_DVDT")
 # connects only once the boost regulates (>= ~12.1 V worst case); the pin sees <= 1.5 V.
 res("R51", "1M", "BOOST_SNS", "U13_UVLO")
 res("R96", "120k", "U13_UVLO", "GND")
-# SHDN: >= 1.8 V to enable (rated 6 V); R99 pulls it to +3V3, Q4 pulls it low to shed (IQ(OFF) <= 25 uA,
-# plus R99's 33 uA).
+# SHDN: >= 1.8 V to enable (rated 6 V); R99 pulls it to +3V3, Q4 pulls it low to shed (I(SHDN) <= 10 uA
+# plus R99's 33-36 uA).
 part("Q4", "sot23_2n7002", "2N7002", "C8545", {"1": "Q4_G", "2": "GND", "3": "RDR_EN"})
 res("R17", "100", "IO48", "Q4_G")
 res("R18", "10k", "Q4_G", "GND")     # off through reset: 10k against an S3 weak pull-up (~45k) -> <= 0.6 V
 res("R99", "100k", "+3V3", "RDR_EN")
 # FLT: open drain (rated 62 V), low on overload, thermal shutdown, UVLO, reverse current, while shed (SHDN
-# low), and through the dV/dt start (with its power-good deglitch, up to ~0.6 s). No open-load indication.
+# low), and through the dV/dt start (ramp <= 0.26 s plus power-good deglitch <= 0.43 s, up to ~0.7 s). No open-load indication.
 # Straight to the GPIO with a pull-up (the TPS1H200A's 4.7k series resistor, R98, is gone).
 res("R97", "10k", "RDR_FLT", "+3V3")
 part("F1", "f1812", "0.5A", "C516067", {"1": "RDR_SW", "2": "+12V_RDR"})   # fail-safe for a shorted U13

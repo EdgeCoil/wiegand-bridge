@@ -181,9 +181,10 @@ Keep the logger at `INFO` in service. At `DEBUG`, ESPHome logs the Wiegand frame
 - **USB alone** (bench use): the board, the charger and a 150 mA reader together already draw about
   1 A, twice a 500 mA port's allowance, fault or not. In a short, about 1.4 A. On USB alone, keep the
   reader under about 50 mA, or run it from 12 V.
-- **Shedding:** IO48 drives Q4, which pulls U13's `SHDN` low (≤ 25 µA, plus R99's 33 µA). R99
-  (100 kΩ to `+3V3`) holds `SHDN` up: U13's own pull-up is specified only at 0.1 µA, less than Q4's
-  leakage. R18 holds Q4 off through reset, boot and OTA, so the reader stays **on**. The firmware sheds the
+- **Shedding:** IO48 drives Q4, which pulls U13's `SHDN` low (≤ 10 µA from the pin, plus R99's
+  33–36 µA). R99 (100 kΩ to `+3V3`) holds `SHDN` up: U13's own pull-up is specified only at 0.1 µA,
+  which Q4's leakage on a hot board (no figure above 25 °C) or leakage across the pin's 0.2 mm gaps
+  could exceed. R18 holds Q4 off through reset, boot and OTA, so the reader stays **on**. The firmware sheds the
   reader only on battery: below 3.0 V, or after an overload. (U6 `EN` is tied high. Pulling `EN` low on
   a non-synchronous boost still leaks `VSYS` through to the output.)
 - **F1** (PTC, 0.5 A hold) stays as a fail-safe in case U13 fails short. It never trips in normal
