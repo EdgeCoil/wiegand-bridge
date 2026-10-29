@@ -222,7 +222,7 @@ at("D15", 131.5, 180.0, 0)      # D0/D1 at J10
 at("D16", 127.0, 180.2, 0)      # LED/BEEP at J11 (rev 11: up, clear of the terminal labels)
 at("D17", 124.6, 137.5, 90)     # IN1/IN2
 at("D18", 124.6, 143.0, 90)     # IN3/IN4
-at("R59", 154.7, 164.0, 90)     # rev 12: shunt between C18/C19 and Q11's source (audit round 1, S3)
+at("R59", 154.7, 164.0, 90)     # rev 12: shunt between C18/C19 and U13's VS (audit round 1, S3)
 at("U12", 159.3, 164.0, 90)     # rev 12: INA226 beside the shunt, sense pins toward it (1 mm for the sense routes)
 at("C39", 158.4, 159.7, 0)      # at U12's VS end
 at("R82", 156.7, 170.2, 90)     # VBUS series 4.7k, from the F1/J3 side (clear of R75)

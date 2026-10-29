@@ -157,10 +157,23 @@ Keep the logger at `INFO` in service. At `DEBUG`, ESPHome logs the Wiegand frame
   boost draws up to about 2.9 A from a 3.0 V cell. The DW01A's over-current trip is guaranteed only
   above 130 mV across the protection FETs, after at most 20 ms (no minimum), and every retry window is
   longer than that. One FS8205A (≤ 63 mΩ at 2.5 V gate) would trip from 2.06 A; with Q13 the pair is
-  ≤ 31.5 mΩ and the worst case is 88 mV (+32 % margin at 25 °C, +19 % with the board's 1.6 W Wi-Fi
-  peak). Neither part gives figures when hot, so the margin there is unproven; typical parts leave
-  several times more. Inrush on battery stays in the limit for up to 14 ms (220 µF). The firmware sheds
-  the reader on battery after the first overload, so a short costs one retry window, not one a second.
+  ≤ 31.5 mΩ. The boost draws constant power, so as `VSYS` sags (to about 2.4 V) the cell current
+  rises. With the source resistance in series (cell, J4 and leads, Q5, copper), the guaranteed worst
+  case at 25 °C (audit round 6, operating-point simulation) is:
+
+  | Cell | Load besides the reader | Cell current | Across the FETs | Margin to 130 mV |
+  |---|---|---|---|---|
+  | 3.0 V | idle | 2.85 A | 96 mV | 26 % |
+  | 3.0 V | Wi-Fi peak (0.5 A at 3.3 V) | 3.58 A | 120 mV | 8 % |
+  | 2.9 V | Wi-Fi peak | 4.0 A | 135 mV | trips |
+
+  Neither part gives figures when hot; scaled by a typical 1.2× at about 60 °C, the Wi-Fi case trips.
+  **So on battery a reader short can take the board down**, until external power returns (the DW01A
+  then releases). That needs two things at once: running on the cell, and a reader short (or a reader
+  plugged in) at a moment of peak Wi-Fi draw, with a worst-case or hot pair. Typical parts leave about
+  twice the margin. Inrush on battery stays in the limit for up to 14 ms (220 µF). The firmware sheds
+  the reader on battery after the first overload, which it sees within about a second even when no
+  reader was connected before, so a short costs one retry window, not one a second.
 - **USB alone** (bench use): the board, the charger and a 150 mA reader together already draw about
   1 A, twice a 500 mA port's allowance, fault or not. In a short the switch holds it to about
   2–2.3 A for ≤ 45 ms in each 0.85 s. On USB alone, keep the reader under about 50 mA, or run it
@@ -186,7 +199,13 @@ Keep the logger at `INFO` in service. At `DEBUG`, ESPHome logs the Wiegand frame
 - **Charging is gated by a 10 k B3950 NTC taped to the cell.** No thermistor connected = no charging
   (fail-safe). Bridge **JP5** to use the on-board RT1 instead, which then measures the board, not the cell.
 - **Protection:** DW01A + two FS8205A in parallel (Q6, Q13; over-discharge about 2.4 V, over-current,
-  short circuit). Q13 is there for the reader-short case (see *Reader supply*).
+  short circuit). Q13 is there for the reader-short case (see *Reader supply*). Halving the sense
+  resistance also halves the DW01A's sensitivity: its fast short-circuit trip (0.82–1.75 V, 400–600 µs)
+  now needs at least 26 A, not 13 A. A hard short across the cell's own leads (about 40 A, about
+  1.27 V across the FETs) is inside that window, so the fast trip is not guaranteed; it may instead be
+  the over-current trip, after up to 20 ms at about 20 A in each FS8205A (rated 24 A pulsed). A short
+  on `VSYS` (through Q5, about 21 A) was already below the fast trip with one FS8205A. Connect the
+  cell with the board unpowered, and never short its leads.
 - **Charge current ~120 mA** (R50 10 k), chosen for a sealed enclosure.
 - **Suggested cell:** a 26650 LiFePO4, 2.5–3.3 Ah, with tabs or leads (not a spring holder), and no
   protection board of its own (the board provides it).
@@ -348,6 +367,13 @@ silkscreen before a cell is ever connected.
   reader is back within about 1.2 s. On the battery alone the board should stay up (Q13 halves the
   protection's sense resistance); try it with a spare cell, since if the DW01A does trip, external
   power is needed to recover (see *Reader supply*).
+- With a scope on `FAULT` (IO9) and the reader terminal, confirm the retry timing: 35–45 ms in the
+  limit, then 0.8–1.2 s off. Thermal cycling inside U13 may stretch an on-window (TI sec. 6.3.2.3);
+  note it if it does.
+- Power the board up with the short already on J3 → the same retry timing from the first attempt.
+  U13's supply comes up before `+3V3` pulls `DELAY` up, and TI doesn't say whether that pin is read
+  once or all the time; if U13 latches off instead of retrying, the reader stays off until a power
+  cycle, and the firmware needs to know.
 - With the reader disconnected → no spurious events for ten minutes.
 - 50 card reads and 20 PINs with no misses. Reset ten times: the reader neither beeps nor flashes.
 

@@ -62,9 +62,19 @@ def analyse(b):
                     union(key, k2)
             elif t.GetLayer() == L and (poly.PointInside(t.GetStart()) or poly.PointInside(t.GetEnd())):
                 union(key, k2)
+        one = pcbnew.SHAPE_POLY_SET()
+        one.AddOutline(poly)
+        bb = poly.BBox()
         for k2, p in pads:
             ls = layers_of(p)
-            if (ls is None or L in ls) and poly.PointInside(p.GetPosition()):
+            if not (ls is None or L in ls) or not bb.Intersects(p.GetBoundingBox()):
+                continue
+            # pad shape against the fill, not the pad's centre: a fragment tied by one thermal spoke
+            # touches the pad's edge only (audit round 6, S6)
+            ps = pcbnew.SHAPE_POLY_SET()
+            p.TransformShapeToPolygon(ps, L, pcbnew.FromMM(0.005), 1000, pcbnew.ERROR_OUTSIDE)
+            ps.BooleanIntersection(one)
+            if ps.Area() > 0:
                 union(key, k2)
     for k1, t in items:                       # track/via/pad endpoint contacts
         pts = [t.GetPosition()] if t.GetClass() == "PCB_VIA" else [t.GetStart(), t.GetEnd()]

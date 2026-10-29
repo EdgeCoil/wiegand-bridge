@@ -208,6 +208,19 @@ interval:
             - output.turn_on: status_ok_led
           else:
             - output.turn_off: status_ok_led
+  # On battery, a short that follows open load (FAULT already on: no reader, or < 10-20 mA) gives
+  # reader_fault no new edge, so read the reader terminal every second until the overload is seen,
+  # not at the 30 s poll (audit round 6, S4).
+  - interval: 1s
+    then:
+      - if:
+          condition:
+            and:
+              - binary_sensor.is_on: reader_fault
+              - binary_sensor.is_off: ext_power
+              - binary_sensor.is_off: reader_overload
+          then:
+            - component.update: reader_monitor
 
 
 

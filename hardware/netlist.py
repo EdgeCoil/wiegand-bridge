@@ -251,7 +251,10 @@ part("J8", "hdr2", "TAMPER EXT", None, {"1": "TAMPER", "2": "GND"})
 # - On battery, while U13 holds its limit, the boost draws up to 2.9 A from a 3.0 V cell (ILIM max,
 #   VS max, efficiency 0.75 ASSUMED): over the DW01A's 130 mV / 63 mohm = 2.06 A guaranteed minimum
 #   (25 C), and longer than its 20 ms maximum delay. Typical figures leave about 2x margin. NOT MET on
-#   guaranteed figures with one FS8205A; Q13 in parallel with Q6 (Block 9) meets it at 25 C.
+#   guaranteed figures with one FS8205A; Q13 in parallel with Q6 (Block 9) meets it at 25 C with the
+#   reader alone (96 mV, 26 %), barely with the Wi-Fi peak (120 mV, 8 %), not from a 2.9 V cell or hot
+#   (audit round 6's operating point, with source resistance; VSYS sags and the current rises). ACCEPTED:
+#   a double fault (battery + reader short) may take the board down until external power returns.
 # - Pins within absolute maximum on the worst transient: VS <= 24.4 V (D20 back-feeds through F1 and
 #   the body diode), OUT -3.5..24.4 V; IN/DIAG_EN a divider of VS (always <= VS); DELAY and FAULT
 #   from +3V3 (<= 7 V).
@@ -282,7 +285,7 @@ res("R95", "6.8k", "U13_CL", "GND")
 # DELAY pulled up = auto-retry (thic on 35-45 ms, off 0.8-1.2 s); Vdl(th) >= 2.7 V, pin max 7 V.
 res("R96", "10k", "U13_DELAY", "+3V3")
 # IN and DIAG_EN together, pulled up from VS: IN <= VS always (its absolute maximum; a +3V3 pull-up
-# exceeded VS whenever the boost was not running), and >= VIH 1.8 V from VS 3.5 V (UVLO 3.5-4.0 V)
+# exceeded VS whenever the boost was not running), and >= VIH 1.8 V from VS 3.6 V (UVLO 3.5-4.0 V)
 # against the 105-272k internal pull-downs. Q4 pulls it low to shed: standby, <= 3 uA.
 res("R51", "100k", "BOOST_SNS", "RDR_EN")
 part("Q4", "sot23_2n7002", "2N7002", "C8545", {"1": "Q4_G", "2": "GND", "3": "RDR_EN"})
@@ -331,8 +334,9 @@ part("Q6", "sot6br", "FS8205A", "C2830320",
 # halves the protection path's resistance. The DW01A trips at VM >= 130 mV (25 C, min) after <= 20 ms;
 # with one FS8205A (<= 63 mohm at VGS 2.5 V) that was 2.06 A, under the 2.9 A the boost draws from a
 # 3.0 V cell while U13 holds its maximum limit on a reader short. Two in parallel: <= 31.5 mohm, VM
-# <= 88 mV at that current (+32 %; +19 % with the board's 1.6 W Wi-Fi peak). Neither part gives hot
-# figures, so the margin when hot is unproven.
+# <= 88 mV at that current alone; with the source resistance and VSYS sag, 96-135 mV (Block 8). Neither
+# part gives hot figures. It also doubles the DW01A's fast short-circuit threshold to >= 26 A
+# (design.md, Battery).
 part("Q13", "sot6br", "FS8205A", "C2830320",
      {"1": "BAT-", "2": "Q6_D", "3": "GND", "4": "OC", "5": "Q6_D", "6": "OD"})
 part("Q5", "sot23_ao3401", "AO3401A", "C15127", {"1": "+5V", "2": "VSYS", "3": "BAT+"})
