@@ -115,8 +115,8 @@ Keep the logger at `INFO` in service. At `DEBUG`, ESPHome logs the Wiegand frame
 
 ## Power
 
-- **Input:** J2 (screw terminal) or J14 (5.5 mm barrel jack, centre positive; DC-005-class jacks are
-  commonly rated 30 V, so above 30 V use J2), then F2 (2 A PTC). **D1** blocks reverse
+- **Input:** J2 (screw terminal) or J14 (5.5 mm barrel jack, centre positive; the DC-005 jack its footprint
+  comes from, LCSC C16214, is listed at 12 V and 1 A, so above 12 V use J2), then F2 (2 A PTC). **D1** blocks reverse
   polarity; **D2** (SMAJ36CA) clamps surges *after* D1, so a reversed supply can't forward-bias it
   and short the source. **Do not exceed 36 V**: the TVS starts conducting at about 40 V.
 - **U2 LMR16020** (60 V buck) makes `+5V_BUCK`. A wide input range means the board doesn't care about

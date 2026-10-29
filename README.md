@@ -133,14 +133,18 @@ can also pretend to be a reader towards an existing access controller.
 
 ## Ordering
 
-1. Upload `hardware/fab/wiegand-bridge-gerbers.zip` to JLCPCB and choose **4 layers**.
+1. Upload `hardware/fab/wiegand-bridge-gerbers.zip` to JLCPCB and choose **4 layers** with
+   **inner copper weight 1 oz**. JLCPCB's default for the inner layers is 0.5 oz, and the power rails
+   and battery paths on In2 are sized for 1 oz (see *Layout* in the design doc).
 2. Turn on **PCB Assembly**, top side, and upload `wiegand-bridge-bom.csv` and `wiegand-bridge-cpl.csv`.
 3. **Check every polarised part in the placement preview** before confirming: diodes, LEDs, ICs,
    the ESP32 and the USB-C. Look especially at the status LEDs D8 and D23 (D8 changed footprint
    family in rev 11) and the new U12 (INA226, MSOP-10) and U9 (THVD1420).
 
-JLCPCB doesn't fit the battery connector housing and cell, the OLED module, or any unpopulated
-headers. Add those yourself.
+JLCPCB doesn't fit the battery connector housing and cell, the OLED module, the barrel jack J14, or
+any unpopulated headers. Add those yourself. J14's footprint is the DC-005 5.5 × 2.0 mm jack (LCSC
+C16214), which LCSC lists at 12 V, 1 A: above 12 V use the screw terminal J2, or fit a jack rated
+for your supply.
 
 ## Rebuilding the board
 
@@ -196,8 +200,8 @@ Tools: KiCad 9.0, Freerouting 2.4.1 (OpenJDK), `easyeda2kicad` 1.0.1 (for `lib/`
 <details>
 <summary>3D models (not included)</summary>
 
-The models come to about 60 MB, so they aren't in the repository; the renders in `fab/` show the
-board with them. To fetch them, run `easyeda2kicad --3d --lcsc_id=<part> --output hardware/lib/wb`
+The models come to about 60 MB, so they aren't in the repository, and the renders in `fab/` show
+only the 0603/0805 passives: every other part renders as bare pads. To fetch them, run `easyeda2kicad --3d --lcsc_id=<part> --output hardware/lib/wb`
 for the LCSC part numbers in the BOM. The 0603/0805 passives use KiCad's stock footprints, whose
 models come from `kicad-packages3d`: `fab.py` looks for them in `~/.local/share/kicad/9.0/3dmodels`
 (three files: `Resistor_SMD.3dshapes/R_0603_1608Metric`, `Capacitor_SMD.3dshapes/C_0603_1608Metric`
